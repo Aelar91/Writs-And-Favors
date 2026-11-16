@@ -1,0 +1,24 @@
+## Interface: 16001
+## Title: Writs and Favors
+## Notes: Craftsman's Writs and Merchant's Favor in game: scans the Auction House, plans for your goal, buys a click each, fills crates, hands them in, and sends the writs route to RestedXP. /writs or /wf
+## Author: Raid Tools
+## Version: 0.19.0
+## IconTexture: Interface\AddOns\WritsAndFavors\logo.tga
+## X-License: GPL-3.0-only
+## OptionalDeps: RXPGuides, Auctionator, TradeSkillMaster, OpenMap
+## SavedVariables: WritsAndFavorsDB
+
+Data.lua
+DataAlliance.lua
+Faction.lua
+Locale.lua
+Plan.lua
+Guide.lua
+State.lua
+Scan.lua
+Buy.lua
+Hook.lua
+Skin.lua
+UI.lua
+Extras.lua
+OpenMapRoute.lua

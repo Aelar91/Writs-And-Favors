@@ -1,0 +1,25 @@
+Writs and Favors: credits and data sources
+==========================================
+
+The addon's code is its own. It bundles no libraries. Its data (Data.lua) is made from these sources:
+
+Polestar (https://github.com/fitzforge/polestar), GPL-3.0
+  The travel data: each side's flight points and flight times, the zeppelins, boats and the tram, where the hand-in NPCs and
+  the mailboxes are, and the riding times between them (worked out on Polestar's navigation grid). Polestar's own
+  sources for these are in its THIRD_PARTY.md: Blizzard's client data tables by way of wago.tools, pfQuest (MIT,
+  Copyright (c) 2017-2021 Eric Mauser (Shagu)), QuestieDB, CMaNGOS classic-db (GPL-3.0) and Carbonite's zone
+  crossings (GPL-3.0).
+
+Wowhead (https://www.wowhead.com/forever)
+  Facts looked up there: which item each Craftsman's Writ asks for and how many, its reputation and coin pouch, who
+  takes it, and what each Waylaid Crate holds and gives.
+
+wago.tools (https://wago.tools)
+  Blizzard's client data tables: flight prices (TaxiPath) and the items' names, stack sizes and qualities.
+
+World of Warcraft and its game data are (c) Blizzard Entertainment. This addon is not made or endorsed by Blizzard.
+
+Works with, when they are installed (none of them is included or needed):
+  RestedXP Guides (the route is sent to it as a guide), OpenMap (the route is drawn on its map), Auctionator and
+  TradeSkillMaster (their last prices, before your own scan), LibSharedMedia and EllesmereUI (their Expressway font,
+  if you have it).

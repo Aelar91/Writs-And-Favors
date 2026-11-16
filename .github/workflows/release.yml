@@ -1,0 +1,20 @@
+# Packages the addon and uploads it to CurseForge when a version tag is pushed (BigWigsMods/packager).
+# Needs the repository secret CF_API_KEY (a CurseForge API token) and "## X-Curse-Project-ID" in the TOC.
+name: Release
+on:
+  push:
+    tags:
+      - '*'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
