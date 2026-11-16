@@ -5,6 +5,7 @@
 ## Version: 0.19.0
 ## IconTexture: Interface\AddOns\WritsAndFavors\logo.tga
 ## X-License: GPL-3.0-only
+## X-Curse-Project-ID: 1808358
 ## OptionalDeps: RXPGuides, Auctionator, TradeSkillMaster, OpenMap
 ## SavedVariables: WritsAndFavorsDB
 
