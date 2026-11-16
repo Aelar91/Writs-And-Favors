@@ -1156,8 +1156,17 @@ local function buildMap()
 	ui.routeList, ui.routeRows, ui.mapSF = rc, {}, sf
 	local key = S.Text(w, 11, C.muted); key:SetPoint('BOTTOMLEFT', PAD, 44); key:SetWidth(LIST_W - 10)
 	ui.mapKey = key
-	ui.mapRxp = S.Button(w, 'Send route to RestedXP', 186, 26, function() ui.sendToRXP(shownRoute()) end, true)
-	ui.mapRxp:SetPoint('BOTTOMLEFT', PAD, 10)
+	ui.mapGo = S.Button(w, 'Guide me', 92, 26, function()
+		local route = shownRoute()
+		if not route then return refresh('Plan first', true) end
+		if not ns.Nav then return end
+		local n = ns.Nav.Start(route)
+		refresh(n > 0 and ('Guide started: ' .. n .. ' steps. Follow the waypoint; the small window says what to do') or 'Nothing on this route to guide', n == 0)
+	end, true)
+	ui.mapGo:SetPoint('BOTTOMLEFT', PAD, 10)
+	tipFor(ui.mapGo, 'Guide me', 'This route step by step, with no other addon: a waypoint for each place, a button for each writ, the hand-in done for you, and a star on who takes it.')
+	ui.mapRxp = S.Button(w, 'Send route to RestedXP', 186, 26, function() ui.sendToRXP(shownRoute()) end)
+	ui.mapRxp:SetPoint('LEFT', ui.mapGo, 'RIGHT', 8, 0)
 	tipFor(ui.mapRxp, 'Send route to RestedXP', 'This route as a RestedXP guide (group "Writs and Favors"), opened for you.')
 	ui.mapModeBtn:SetPoint('LEFT', ui.mapRxp, 'RIGHT', 8, 0)
 	key:SetText(WHITE .. '---|r ride   ' .. GOLD .. '- - -|r flight   |cff73bfff. . .|r boat, zeppelin   badge: hand-ins\nWheel: zoom   drag: move   click a step: go to it')
@@ -2034,7 +2043,7 @@ local function planNow()
 		:format(WHITE, mineMode and 'My picks' or s.days == 1 and 'Today' or ('Day 1 of ' .. s.days), #day.writs, commas(day.rep), Plan.Money(day.gold), math.floor(plan.route.total / 60 + 0.5),
 			MUTED, table.concat(notes, '. '), goalLine))
 	startBuy(plan.shopping, refresh, {
-		done = 'All bought. Take them out of the mail, then Route (title bar): the hand-in route, and To RestedXP there.',
+		done = 'All bought. Then Route (title bar): the hand-in route. Guide me there takes you through it, or send it to RestedXP.',
 		onBought = function(e, qty, paid)
 			local t = ui.trackFor()
 			t.spent, t.planned = t.spent + paid, t.planned + (e.plan or 0) * qty

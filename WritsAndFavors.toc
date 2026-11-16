@@ -2,7 +2,7 @@
 ## Title: Writs and Favors
 ## Notes: Craftsman's Writs and Merchant's Favor in game: scans the Auction House, plans for your goal, buys a click each, fills crates, hands them in, and sends the writs route to RestedXP. /writs or /wf
 ## Author: Raid Tools
-## Version: 0.19.1
+## Version: 0.20.0
 ## IconTexture: Interface\AddOns\WritsAndFavors\logo.tga
 ## X-License: GPL-3.0-only
 ## X-Curse-Project-ID: 1808358
@@ -33,4 +33,5 @@ Hook.lua
 Skin.lua
 UI.lua
 Extras.lua
+Nav.lua
 OpenMapRoute.lua

@@ -1,4 +1,4 @@
-Writs and Favors 0.19.1 (trial)
+Writs and Favors 0.20.0 (trial)
 =================================
 
 Craftsman's Writs and Merchant's Favor, planned in game. It scans the Auction House, picks the writs that reach your
@@ -33,8 +33,11 @@ Writs
 5. Buy: click the big button once for each line. Stackable things (potions, cloth) take two clicks, "Check price"
    then "Buy". If a price has gone up more than 25% since the scan it asks for "Anyway"; "Skip" moves on.
    What you buy arrives in your mailbox.
-6. Route (title bar): the hand-in route, starting at a mailbox to collect what you bought. "Send route to RestedXP"
-   opens it as a guide. With OpenMap the route is on the world map: click a writ there to add it to the plan, or
+6. Route (title bar): the hand-in route, starting at a mailbox to collect what you bought. "Guide me" takes you
+   through it with no other addon: a waypoint for each place, a small window saying what to do, a button that
+   targets who takes the writ, stars them and uses it, and the hand-in done for you when you talk to them (hold
+   Shift to do it yourself). It moves on by itself as each step is done; < and > go by hand, x or /writs guide
+   stops it. "Send route to RestedXP" opens the same route as a RestedXP guide instead. With OpenMap the route is on the world map: click a writ there to add it to the plan, or
    choose "Pick my own" to plan only the writs you pick. "Hand in what I have" routes what you already hold.
 
 Writs and items in your bags, mailbox and bank count first: open your mailbox and bank once so it can see them.
@@ -79,9 +82,10 @@ Known limits
 - A very big goal in 1 day (100 or so writs) makes the plan pause for a moment.
 - Fill only works out of combat.
 - Prices are kept for each realm and faction: a character on another realm scans its own.
-- 43 of the Expert and Artisan writs have no known hand-in yet (the table says "not known yet"), so they are not
-  planned or routed. If you hand one in, the addon keeps where you did: type /writs places and send the lines in,
-  and the next version routes them.
+- 41 of the Artisan and Expert writs have no known hand-in yet (the table says "not known yet"), so they are not
+  planned or routed. The game marks the place on your map once a writ has been used: buy one of those writs, use
+  it, and the addon keeps where it goes. Type /writs places and send the lines in, and the next version routes
+  them.
 - Auto hand-in (at Dokimi or Marcy Baker) hands in one Sealed crate each time the quest window opens. If she does not offer the next
   one by herself, talk to her again.
 - Other languages: the Auction House searches use your game's own item names, so scans and buying work, but the

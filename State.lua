@@ -155,6 +155,52 @@ function State.Learn(db, quest)
 	return db.learned[quest]
 end
 function State.Learned(db, quest) return db and db.learned and db.learned[quest] or nil end
+local told = {}
+function State.LearnFromLog(db)
+	if not (db and C_QuestLog and C_QuestLog.IsOnQuest) then return 0 end
+	local n = 0
+	for quest, w in pairs(noPlace) do
+		local had = db.learned and db.learned[quest]
+		if not (had and had.x) and C_QuestLog.IsOnQuest(quest) then
+			local map, x, y
+			if C_QuestLog.GetNextWaypoint then
+				local ok, m, wx, wy = pcall(C_QuestLog.GetNextWaypoint, quest)
+				if ok and m and wx then map, x, y = m, wx, wy end
+			end
+			if not map and C_QuestLog.GetQuestsOnMap and C_Map and C_Map.GetBestMapForUnit then
+				local here = C_Map.GetBestMapForUnit('player')
+				local info = here and C_Map.GetMapInfo and C_Map.GetMapInfo(here)
+				for _, m in ipairs({ here, info and info.parentMapID }) do
+					local ok, list = pcall(C_QuestLog.GetQuestsOnMap, m)
+					if ok and type(list) == 'table' then
+						for _, q in ipairs(list) do if q.questID == quest and q.x then map, x, y = m, q.x, q.y end end
+					end
+					if map then break end
+				end
+			end
+			if map and x then
+				local info = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(map)
+				db.learned = db.learned or {}
+				db.learned[quest] = { zone = (info and info.name) or ('map ' .. map), map = map, x = math.floor(x * 1000 + 0.5) / 10, y = math.floor(y * 1000 + 0.5) / 10, from = 'map' }
+				n = n + 1
+				if not told[quest] then
+					told[quest] = true
+					print(('|cffffc840Writs and Favors|r: learnt where %s is handed in: %s %.1f, %.1f (/writs places lists them all)'):format(w[7], db.learned[quest].zone, db.learned[quest].x, db.learned[quest].y))
+				end
+			end
+		end
+	end
+	return n
+end
+local lf = CreateFrame('Frame')
+for _, e in ipairs({ 'PLAYER_ENTERING_WORLD', 'QUEST_ACCEPTED', 'QUEST_POI_UPDATE', 'QUEST_LOG_UPDATE' }) do pcall(lf.RegisterEvent, lf, e) end
+local lastLook = 0
+lf:SetScript('OnEvent', function()
+	local t = GetTime and GetTime() or 0
+	if t - lastLook < 2 then return end
+	lastLook = t
+	pcall(State.LearnFromLog, ns.db)
+end)
 
 function State.Hearth()
 	local bind = GetBindLocation and GetBindLocation()

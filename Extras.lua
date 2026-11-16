@@ -596,6 +596,11 @@ function ns.Slash(arg)
 		say(n == 0 and 'no hand-ins learnt yet. Hand in a writ the table marks "not known yet" and where you did is kept.' or (n .. ' hand-ins learnt. Send these lines in and the next version routes them.'))
 		return true
 	end
+	if arg:match('^%s*guide') then
+		if ns.Nav and ns.Nav.Active() then ns.Nav.Stop(); say('the guide is stopped')
+		else say('no guide running. Open Route (the panel\'s title bar) and click Guide me.') end
+		return true
+	end
 	if arg:match('^%s*minimap') then
 		s.minimapHide = not s.minimapHide or nil
 		showButton()

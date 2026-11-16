@@ -1,5 +1,10 @@
 # Writs and Favors
 
+## 0.20.0
+- Guide me: the hand-in route step by step with no other addon. A waypoint for each place, a button that targets who takes the writ, stars them and uses it, and the hand-in done for you. RestedXP is still there if you prefer it.
+- Two more hand-ins (Mechanical Dragonling, Potion of Demonslaying) and six hand-in positions corrected.
+- A writ with no known hand-in: use it, and the addon reads where the game marks it (/writs places).
+
 ## 0.19.1
 - Listed under Auctions in the game's AddOns list.
 - The route on the world map sits on the map's left; folded, its tab is at the bottom left. The "Every zone" list is gone, so the steps have more room.

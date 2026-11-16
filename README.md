@@ -13,6 +13,7 @@ A World of Warcraft: Forever addon. **Writs and Favors** works out your Craftsma
 - **Quick scans.** It searches only for the writs and their items. Scanning again within 15 minutes refreshes only what has gone stale.
 - **One click a purchase.** The buy list goes line by line. If a price has gone up more than 25% since the scan, it asks before buying.
 - **Counts what you have.** Writs and items in your bags, mailbox and bank come off the list first. It reminds you before buying if you haven't opened your mailbox or bank.
+- **Guide me.** The route step by step with no other addon: a waypoint for each place, a button that targets who takes the writ, stars them and uses it, and the hand-in done for you.
 - **The hand-in route.** The quickest order by flight, boat, zeppelin or tram, Hearthstone and class teleports. It counts your free bag slots and stops at mailboxes where they are least out of the way.
 
 ## Merchant's Favor
@@ -32,7 +33,7 @@ A World of Warcraft: Forever addon. **Writs and Favors** works out your Craftsma
 
 ## Better with (all optional)
 
-- **RestedXP Guides:** the hand-in route as a guide, with the arrow.
+- **RestedXP Guides:** the hand-in route as a RestedXP guide, if you prefer it to the built-in one.
 - **OpenMap:** the route drawn on the world map, and writs picked by clicking them there.
 - **Auctionator or TradeSkillMaster:** a first plan from their last prices, before you scan yourself.
 
@@ -41,7 +42,7 @@ A World of Warcraft: Forever addon. **Writs and Favors** works out your Craftsma
 1. Open the Auction House. The panel opens beside it (`/writs` opens it anywhere).
 2. Pick the standing to reach and by when, then click **Scan**.
 3. Click the buy button once for each line of the buy list.
-4. Collect your mail, then click **Route** for the hand-in route.
+4. Click **Route** for the hand-in route, then **Guide me** to be taken through it.
 
 For Merchant's Favor, click **Favor** in the title bar or type `/favor`.
 
@@ -66,7 +67,7 @@ For Merchant's Favor, click **Favor** in the title bar or type `/favor`.
 - Prices are from the moment you scan. The buy button always shows the live price.
 - Prices are kept for each realm and faction.
 - Open your mailbox and bank once so the addon can see what's in them.
-- 43 of the Expert and Artisan writs have no known hand-in yet, so they are not routed. Hand one in and the addon keeps where; `/writs places` lists them to send in.
+- 41 of the Artisan and Expert writs have no known hand-in yet, so they are not routed. Buy one, use it, and the addon keeps where the game marks it; `/writs places` lists them to send in.
 
 ## Credits and licence
 

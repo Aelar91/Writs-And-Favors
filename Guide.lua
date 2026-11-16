@@ -121,3 +121,55 @@ function Guide.Text(route, name)
 	push(out, 'step', '    >>All handed in. Well done.')
 	return table.concat(out, '\n')
 end
+
+local function nodeNamed(name) for id, n in pairs(D.nodes) do if n[1] == name then return id, n end end end
+function Guide.Steps(route)
+	local out = {}
+	local function add(s) out[#out + 1] = s; return s end
+	for _, l in ipairs(route.legs) do
+		local label, zone, map, x, y = unpack(D.places[l.row])
+		if l.port then
+			local n = D.nodes[l.port.node]
+			add({ kind = 'port', hearth = l.port.kind == 'hearth' or nil, spell = l.port.spell,
+				text = l.port.kind == 'hearth' and ('Use your Hearthstone (' .. l.port.name .. ')') or ('Cast Teleport: ' .. l.port.name .. (l.port.rune and ' (a Rune of Teleportation)' or '')),
+				arrive = n and { map = n[2], x = n[3], y = n[4] } or nil })
+		end
+		for _, h in ipairs(l.hops) do
+			local kind, from, to, hmap, hx, hy, npc, toMap = unpack(D.hops[h])
+			if kind == 'fly' then
+				local _, n = nodeNamed(to)
+				add({ kind = 'fly', map = hmap, x = hx, y = hy, npc = npc,
+					text = (npc and ('Talk to ' .. npc .. ' at ' .. from) or ('At ' .. from)) .. ' and fly to ' .. to,
+					arrive = n and { map = n[2], x = n[3], y = n[4] } or nil })
+			else
+				add({ kind = 'ride', map = hmap, x = hx, y = hy, toMap = toMap, text = 'Take the ' .. kind .. ' from ' .. from .. ' to ' .. to })
+			end
+		end
+		if l.mail then
+			local need, names = {}, {}
+			for _, w in ipairs(l.writs) do
+				need[#need + 1] = { w.writ, 1 }
+				need[#need + 1] = { w.item, w.n }
+				names[#names + 1] = (w.n > 1 and (w.n .. ' x ') or '') .. w.itemName
+			end
+			local what = #l.writs > 0 and (#l.writs .. ' writ' .. (#l.writs == 1 and '' or 's') .. ' and what they ask for') or ''
+			if l.crateMail then what = what .. (what ~= '' and ', and ' or '') .. 'your crates and bundles' end
+			add({ kind = 'mail', map = map, x = x, y = y, need = need, text = label .. ': take out ' .. what, detail = table.concat(names, ', ') })
+		else
+			for _, w in ipairs(l.writs) do
+				add({ kind = 'writ', map = map, x = x, y = y, npc = label, zone = zone, writ = w.writ, quest = w.quest, item = w.item, n = w.n,
+					text = 'Hand in ' .. (w.n > 1 and (w.n .. ' x ') or '') .. w.itemName .. ' to ' .. label })
+			end
+			if l.crates then
+				local ids = {}
+				for _, g in ipairs(l.crates) do ids[#ids + 1] = g.sealed end
+				add({ kind = 'crates', map = map, x = x, y = y, npc = label, zone = zone, sealed = ids, text = 'Hand in your Sealed crates to ' .. label })
+			end
+			if l.label then
+				add({ kind = 'label', map = map, x = x, y = y, npc = label, zone = zone, writ = l.label.item, quest = l.label.quest,
+					text = 'Use your Shipping Label and hand it in to ' .. label .. ' (2,000 reputation, once)' })
+			end
+		end
+	end
+	return out
+end
