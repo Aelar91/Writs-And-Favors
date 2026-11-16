@@ -1,4 +1,4 @@
-Writs and Favors 0.19.0 (trial)
+Writs and Favors 0.19.1 (trial)
 =================================
 
 Craftsman's Writs and Merchant's Favor, planned in game. It scans the Auction House, picks the writs that reach your
@@ -38,7 +38,7 @@ Writs
    choose "Pick my own" to plan only the writs you pick. "Hand in what I have" routes what you already hold.
 
 Writs and items in your bags, mailbox and bank count first: open your mailbox and bank once so it can see them.
-Hover the "Held:" line for what it counted. Opts (title bar): buying for today or every day, and whether to skip
+Hover the "Held:" line for what it counted. The cog (title bar): buying for today or every day, and whether to skip
 writs with only a few listed. Your free bag slots are counted for you: the route stops at a mailbox for as much as
 fits, hands it in, and stops at the next mailbox for more. More free slots means fewer mailbox stops.
 

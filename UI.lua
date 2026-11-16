@@ -82,6 +82,13 @@ local function guardBuy(go)
 	w:SetPoint('CENTER', UIParent, 'CENTER', 0, 80)
 	w:SetScale(settings().scale or 1)
 	w:Show()
+	local function fit()
+		local h = w.text:GetStringHeight()
+		if not h or h < 20 then h = 96 end
+		w:SetHeight(36 + h + 18 + 28 + 14)
+	end
+	fit()
+	C_Timer.After(0, function() if w:IsShown() then fit() end end)
 end
 
 local function prices()
@@ -881,10 +888,6 @@ ui_drawRoute = function()
 		rows[#rows + 1] = { head = 'STEPS' }
 	end
 	for _, st in ipairs(steps) do rows[#rows + 1] = { step = st } end
-	if #zoneSums > 0 and ui.mapSource ~= 'held' then
-		rows[#rows + 1] = { head = 'EVERY ZONE (all its writs, best value first)' }
-		for _, z in ipairs(zoneSums) do if z.n > 0 then rows[#rows + 1] = { zsum = z } end end
-	end
 	local y = 0
 	for i, row in ipairs(rows) do
 		local r = ui.routeRows[i]
@@ -1076,7 +1079,7 @@ local function buildMap()
 	local title = S.Text(head, 14, C.gold); title:SetPoint('LEFT', PAD - 1, 0); title:SetText('Route')
 	local close = S.Button(head, 'x', 24, 22, function() ui_hideRoute() end); close:SetPoint('RIGHT', -4, 0)
 	ui.mapClose = close
-	ui.mapFold = S.Button(head, '>', 24, 22, function() ui.foldRoute(true) end); ui.mapFold:SetPoint('RIGHT', close, 'LEFT', -4, 0)
+	ui.mapFold = S.Button(head, '<', 24, 22, function() ui.foldRoute(true) end); ui.mapFold:SetPoint('RIGHT', close, 'LEFT', -4, 0)
 	local function tipFor(b, title, text)
 		b:HookScript('OnEnter', function(self) GameTooltip:SetOwner(self, 'ANCHOR_BOTTOM'); GameTooltip:AddLine(title); GameTooltip:AddLine(text, 1, 1, 1, true); GameTooltip:Show() end)
 		b:HookScript('OnLeave', function() GameTooltip:Hide() end)
@@ -1287,11 +1290,11 @@ local function placeStrip()
 	if not (w and ui.omMode) then return end
 	local sc = WorldMapFrame and WorldMapFrame.ScrollContainer
 	w:ClearAllPoints()
-	if sc and mapUp() then w:SetPoint('TOPRIGHT', sc, 'TOPRIGHT', -10, -10)
+	if sc and mapUp() then w:SetPoint('TOPLEFT', sc, 'TOPLEFT', 10, -10)
 	else w:SetPoint('TOPLEFT', ui.frame, 'TOPRIGHT', 6, 0) end
 	if ui.routeTab then
 		ui.routeTab:ClearAllPoints()
-		if sc then ui.routeTab:SetPoint('TOPRIGHT', sc, 'TOPRIGHT', -10, -10) end
+		if sc then ui.routeTab:SetPoint('BOTTOMLEFT', sc, 'BOTTOMLEFT', 10, 10) end
 	end
 end
 local function fitStrip(listH)
@@ -1308,7 +1311,7 @@ end
 local function fold(on)
 	settings().routeFolded = on and true or nil
 	if not ui.routeTab then
-		local t = S.Button(UIParent, 'Route  <', 72, 24, function() fold(false) end)
+		local t = S.Button(UIParent, 'Route  >', 72, 24, function() fold(false) end)
 		t:SetFrameStrata('FULLSCREEN_DIALOG')
 		ui.routeTab = t
 	end
@@ -1505,7 +1508,20 @@ local function build()
 	end
 	ui.modeBtn = S.Button(head, 'Favor', 48, 22, function() ui.switchMode() end)
 	ui.modeBtn:SetPoint('RIGHT', ui.routeBtn, 'LEFT', -4, 0)
-	ui.optsBtn = S.Button(head, 'Opts', 38, 22, function() ui.opts:SetShown(not ui.opts:IsShown()) end)
+	ui.optsBtn = S.Button(head, '', 24, 22, function() ui.opts:SetShown(not ui.opts:IsShown()) end)
+	do
+		local cog = ui.optsBtn:CreateTexture(nil, 'ARTWORK')
+		cog:SetSize(16, 16); cog:SetPoint('CENTER')
+		cog:SetTexture('Interface\\Buttons\\UI-OptionsButton')
+		ui.optsBtn.cog = cog
+		ui.optsBtn:HookScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+			GameTooltip:AddLine('Options')
+			GameTooltip:AddLine('Buy for today or every day, thinly listed writs, your free bag slots, and what it found about your character.', 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		ui.optsBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
+	end
 	ui.optsBtn:SetPoint('RIGHT', ui.modeBtn, 'LEFT', -4, 0)
 	f:SetScript('OnHide', function() if ui.mapWin and not (ui.omMode and WorldMapFrame and WorldMapFrame:IsShown()) then ui.mapWin:Hide() end end)
 

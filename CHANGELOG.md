@@ -1,5 +1,11 @@
 # Writs and Favors
 
+## 0.19.1
+- Listed under Auctions in the game's AddOns list.
+- The route on the world map sits on the map's left; folded, its tab is at the bottom left. The "Every zone" list is gone, so the steps have more room.
+- A cog for the options.
+- The mailbox and bank reminder is as tall as its text (its buttons sat on the last line).
+
 ## 0.19.0
 - Alliance: the addon now works for both sides. The Alliance has its own routes, reputation (Azeroth Commerce Authority) and crate hand-in (Marcy Baker at Three Corners in Redridge Mountains). New and not played yet: please report anything odd.
 
