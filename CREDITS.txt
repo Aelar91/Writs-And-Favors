@@ -15,11 +15,16 @@ Wowhead (https://www.wowhead.com/forever)
   takes it, and what each Waylaid Crate holds and gives.
 
 wago.tools (https://wago.tools)
-  Blizzard's client data tables: flight prices (TaxiPath) and the items' names, stack sizes and qualities.
+  Blizzard's client data tables: flight prices (TaxiPath) and the items' names, stack sizes and qualities; the
+  recipes' items and the skill each needs.
+
+WoW Professions (https://www.wow-professions.com/forever)
+  Facts looked up there: which recipes and rewards the supply camps sell for Merchant's Favor, what each costs and
+  the standing it needs. (The game's own prices replace these once you open a vendor.)
 
 World of Warcraft and its game data are (c) Blizzard Entertainment. This addon is not made or endorsed by Blizzard.
 
 Works with, when they are installed (none of them is included or needed):
-  RestedXP Guides (the route is sent to it as a guide), OpenMap (the route is drawn on its map), Auctionator and
+  RestedXP Guides (the route is sent to it as a guide), Auctionator and
   TradeSkillMaster (their last prices, before your own scan), LibSharedMedia and EllesmereUI (their Expressway font,
   if you have it).

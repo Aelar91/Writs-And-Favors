@@ -36,6 +36,19 @@ function Guide.CrateGroups(crates)
 	end
 	return out
 end
+function Guide.FillLines(fill)
+	local names = D.waylaid.names or {}
+	local out, n = {}, 0
+	for _, c in ipairs(fill or {}) do
+		n = n + c.count
+		local with = {}
+		for _, b in ipairs(c.bundles or {}) do
+			with[#with + 1] = ((#c.bundles > 1) and (b.count .. ' with ') or '') .. b.n .. ' ' .. (names[b.item] or ('item ' .. b.item)) .. ((#c.bundles > 1) and '' or ' each')
+		end
+		out[#out + 1] = c.count .. ' x ' .. ((names[c.id] or ('crate ' .. c.id)):gsub('^Waylaid Crate: ', '')) .. ': ' .. table.concat(with, ', ')
+	end
+	return out, n
+end
 local function fillStep(out, groups, goto)
 	local ids = {}
 	for _, g in ipairs(groups) do for _, id in ipairs(g.waylaid) do ids[#ids + 1] = id end end
@@ -89,9 +102,11 @@ function Guide.Text(route, name)
 				fillStep(out, l.crateMail, goto)
 			end
 		else
-			for _, w in ipairs(l.writs) do
+			local zl = route.level and ns.Plan.Over(l.row, route.level)
+			local warn = zl and ('    >>|cRXP_WARN_' .. clean(ns.Plan.WarnText(zone, zl, route.level)) .. '|r') or {}
+			for k, w in ipairs(l.writs) do
 				local n = clean(w.itemName)
-				push(out, 'step', itemcount({ w.writ }), goto,
+				push(out, 'step', itemcount({ w.writ }), goto, k == 1 and warn or {},
 					'    .use ' .. w.writ .. " >>|cRXP_WARN_Use the|r [|cRXP_LOOT_Craftsman's Writ: " .. n .. '|r] |cRXP_WARN_to start its quest|r',
 					'    .collect ' .. w.writ .. ',1,' .. w.quest,
 					'    .daily ' .. w.quest .. " >>Accept Craftsman's Writ: " .. n)
@@ -100,15 +115,33 @@ function Guide.Text(route, name)
 					'    .target ' .. clean(label))
 				handed[#handed + 1] = w
 			end
-			if l.crates then fillStep(out, l.crates, goto); crateSteps(out, l.crates, goto) end
-			if l.label then
+			local function labelSteps()
 				local li, lq = l.label.item, l.label.quest
 				push(out, 'step', '    .itemcount ' .. li .. ',1', goto,
 					'    .use ' .. li .. ' >>|cRXP_WARN_Use the|r [|cRXP_LOOT_Shipping Label|r] |cRXP_WARN_to start its quest|r',
 					'    .collect ' .. li .. ',1,' .. lq,
 					'    .accept ' .. lq .. ' >>Accept Shipping Label')
 				push(out, 'step', '    .isOnQuest ' .. lq, goto, '    >>Talk to |cRXP_FRIENDLY_' .. clean(D.waylaid.handIn.npc) .. '|r',
-					'    .turnin ' .. lq .. ' >>Turn in Shipping Label (2,000 reputation, once)', '    .target ' .. clean(D.waylaid.handIn.npc))
+					'    .turnin ' .. lq .. ' >>Turn in Shipping Label (2,000 reputation and 50 Favor, once)', '    .target ' .. clean(D.waylaid.handIn.npc))
+			end
+			local labelAfter = l.label and l.label.needsCrate and (l.crates or (l.receipts and l.receiptFill))
+			if l.label and not labelAfter then labelSteps() end
+			if l.crates then
+				fillStep(out, l.crates, goto)
+				if labelAfter then labelSteps() end
+				crateSteps(out, l.crates, goto)
+			end
+			if l.receipts then
+				if l.receiptFill then
+					local groups = Guide.CrateGroups(l.receiptFill)
+					local lines, nFill = Guide.FillLines(l.receiptFill)
+					push(out, 'step', goto, '    +Fill ONLY ' .. (nFill == 1 and 'this 1 crate' or ('these ' .. nFill .. ' crates')) .. (l.label and l.label.needsCrate and nFill == 1 and ', for the Shipping Label: ' or ', for the Favor your receipts cost: ') .. clean(table.concat(lines, '; ')) .. '. Leave your other ' .. l.receipts .. ' crates EMPTY: they get the receipts')
+					for _, c in ipairs(l.receiptFill) do push(out, '    .use ' .. c.id) end
+					if labelAfter and not l.crates then labelSteps() end
+					crateSteps(out, groups, goto)
+				end
+				push(out, 'step', goto, '    >>Buy ' .. l.receipts .. ' Forged Delivery Receipt' .. (l.receipts == 1 and '' or 's') .. ' from the Uncertified Scribe at the camp (15 Favor each). Use one on each empty Waylaid Crate (the Receipt button on the panel), then hand the crates in to |cRXP_FRIENDLY_' .. clean(D.waylaid.handIn.npc) .. '|r: 50 reputation each',
+					'    .target ' .. clean(D.waylaid.handIn.npc))
 			end
 		end
 	end
@@ -154,20 +187,39 @@ function Guide.Steps(route)
 			end
 			local what = #l.writs > 0 and (#l.writs .. ' writ' .. (#l.writs == 1 and '' or 's') .. ' and what they ask for') or ''
 			if l.crateMail then what = what .. (what ~= '' and ', and ' or '') .. 'your crates and bundles' end
-			add({ kind = 'mail', map = map, x = x, y = y, need = need, text = label .. ': take out ' .. what, detail = table.concat(names, ', ') })
+			add({ kind = 'mail', map = map, x = x, y = y, need = need, crates = l.crateMail and true or nil, text = label .. ': take out ' .. what, detail = table.concat(names, ', ') })
 		else
+			local zl = route.level and ns.Plan.Over(l.row, route.level)
+			local warn = zl and ns.Plan.WarnText(zone, zl, route.level) or nil
 			for _, w in ipairs(l.writs) do
-				add({ kind = 'writ', map = map, x = x, y = y, npc = label, zone = zone, writ = w.writ, quest = w.quest, item = w.item, n = w.n,
+				add({ kind = 'writ', map = map, x = x, y = y, npc = label, zone = zone, warn = warn, writ = w.writ, quest = w.quest, item = w.item, n = w.n,
 					text = 'Hand in ' .. (w.n > 1 and (w.n .. ' x ') or '') .. w.itemName .. ' to ' .. label })
 			end
+			local function labelStep()
+				add({ kind = 'label', map = map, x = x, y = y, npc = label, zone = zone, writ = l.label.item, quest = l.label.quest,
+					text = 'Use your Shipping Label and hand it in to ' .. label .. ' (2,000 reputation and 50 Favor, once)' .. (l.label.needsCrate and '. The first crate you fill gives it' or '') })
+			end
+			local labelAfter = l.label and l.label.needsCrate and l.receipts and l.receiptFill
+			if l.label and not labelAfter then labelStep() end
 			if l.crates then
 				local ids = {}
 				for _, g in ipairs(l.crates) do ids[#ids + 1] = g.sealed end
 				add({ kind = 'crates', map = map, x = x, y = y, npc = label, zone = zone, sealed = ids, text = 'Hand in your Sealed crates to ' .. label })
 			end
-			if l.label then
-				add({ kind = 'label', map = map, x = x, y = y, npc = label, zone = zone, writ = l.label.item, quest = l.label.quest,
-					text = 'Use your Shipping Label and hand it in to ' .. label .. ' (2,000 reputation, once)' })
+			if l.receipts and l.receiptFill then
+				local lines, nFill = Guide.FillLines(l.receiptFill)
+				local ids = {}
+				for _, g in ipairs(Guide.CrateGroups(l.receiptFill)) do ids[#ids + 1] = g.sealed end
+				add({ kind = 'fill', map = map, x = x, y = y, npc = label, zone = zone,
+					text = 'Fill ' .. nFill .. ' crate' .. (nFill == 1 and '' or 's') .. ' for Favor: ' .. table.concat(lines, '; '),
+					detail = 'Fill, on the panel (or your Writs macro), fills exactly these. Your other ' .. l.receipts .. ' crates stay empty: they get the receipts.' })
+				if labelAfter then labelStep() end
+				add({ kind = 'crates', map = map, x = x, y = y, npc = label, zone = zone, sealed = ids, text = 'Hand in the ' .. nFill .. ' Sealed crate' .. (nFill == 1 and '' or 's') .. ' to ' .. label .. ': the Favor for your receipts' })
+			end
+			if l.receipts then
+				add({ kind = 'receipts', map = map, x = x, y = y, npc = label, zone = zone, n = l.receipts,
+					text = 'Buy ' .. l.receipts .. ' Forged Delivery Receipt' .. (l.receipts == 1 and '' or 's') .. ' from the Uncertified Scribe (15 Favor each), use one on each empty Waylaid Crate, and hand the crates in to ' .. label,
+					detail = 'Receipt, on the panel (or your Writs macro), puts one on each empty crate. 50 reputation each.' })
 			end
 		end
 	end

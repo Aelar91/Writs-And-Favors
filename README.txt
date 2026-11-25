@@ -1,5 +1,5 @@
-Writs and Favors 0.20.0 (trial)
-=================================
+Writs and Favors 0.21.0
+=======================
 
 Craftsman's Writs and Merchant's Favor, planned in game. It scans the Auction House, picks the writs that reach your
 reputation goal for the least gold (or the least time), buys them a click each, and gives you the hand-in route. It
@@ -18,7 +18,6 @@ Install
 
 Works on its own. Better with (all optional):
 - RestedXP (RXPGuides): the hand-in route as a guide with the arrow.
-- OpenMap: the route drawn on the world map, and writs picked by clicking them there.
 - Auctionator or TradeSkillMaster: a first plan from their last scan, before you scan yourself.
 
 Writs
@@ -33,15 +32,15 @@ Writs
 5. Buy: click the big button once for each line. Stackable things (potions, cloth) take two clicks, "Check price"
    then "Buy". If a price has gone up more than 25% since the scan it asks for "Anyway"; "Skip" moves on.
    What you buy arrives in your mailbox.
-6. Route (title bar): the hand-in route, starting at a mailbox to collect what you bought. "Guide me" takes you
-   through it with no other addon: a waypoint for each place, a small window saying what to do, a button that
+6. Then the way round, starting at a mailbox to collect what you bought. "Guide me" (under the Buy button) takes
+   you through it with no other addon: a waypoint for each place, a small window saying what to do, a button that
    targets who takes the writ, stars them and uses it, and the hand-in done for you when you talk to them (hold
    Shift to do it yourself). It moves on by itself as each step is done; < and > go by hand, x or /writs guide
-   stops it. "Send route to RestedXP" opens the same route as a RestedXP guide instead. With OpenMap the route is on the world map: click a writ there to add it to the plan, or
-   choose "Pick my own" to plan only the writs you pick. "Hand in what I have" routes what you already hold.
+   stops it. "Send to RestedXP" opens the same route as a RestedXP guide instead. "What I have" (by PLAN) makes
+   both go round the writs you already hold, with nothing to buy.
 
 Writs and items in your bags, mailbox and bank count first: open your mailbox and bank once so it can see them.
-Hover the "Held:" line for what it counted. The cog (title bar): buying for today or every day, and whether to skip
+Hover the "You already have" line for what it counted. The cog (title bar): buying for today or every day, and whether to skip
 writs with only a few listed. Your free bag slots are counted for you: the route stops at a mailbox for as much as
 fits, hands it in, and stops at the next mailbox for more. More free slots means fewer mailbox stops.
 
@@ -49,7 +48,7 @@ Tooltips, the table and the minimap button
 ------------------------------------------
 - Hover a writ, a writ's item, a Waylaid Crate or a bundle item anywhere (bags, mail, Auction House): the tooltip
   says what it still costs you, what it gives, and what that comes to a reputation or a Favor.
-- "Browse all" (the tab above the panel, or right-click the minimap button): every writ and every crate in a table.
+- "Browse" (the panel's title bar, or right-click the minimap button): every writ and every crate in a table.
   Click a column to sort by it; the best value is marked. "Cost / rep" and "Cost / Favor" are the gold one
   reputation or one Favor costs.
 - Buying from the table (at the Auction House): click a row, then the Buy button at the bottom. One click starts,
@@ -60,8 +59,10 @@ Tooltips, the table and the minimap button
 
 Merchant's Favor
 ----------------
-1. Click Favor in the title bar (or type /favor).
-2. Pick how much Favor to get, then click "Scan crates".
+1. Type the Favor you want to have in the Favor box. "Recipes" beside it lists the recipes sold for Favor for your
+   professions (not the ones you know): tick the ones you want and the box becomes what they cost.
+   For Favor alone, pick "No reputation" (or type /favor).
+2. Click Scan ("Scan crates" with No reputation).
 3. Buy each line, take everything out of the mail, then click "Fill" again and again: each click fills the next crate.
 4. The Waypoint button puts a waypoint on who takes your crates (Dokimi, or Marcy Baker for the Alliance). With "Auto hand-in: on", talking to her hands in your Sealed crates,
    one each time. Hold Shift to talk to her normally.
@@ -71,9 +72,10 @@ Commands
 /writs          the panel on the writs          /favor    the panel on Merchant's Favor
 /writs held     what it counts as held          /writs held forget   forget the mail and bank it remembers
 /writs scale 1.2   the panel's size (or A- / A+)   /writs reset   back beside the Auction House
-/writs map      the route on or off OpenMap's map
 /writs browse   the table of every writ and crate   /writs minimap   the minimap button on or off
 /writs tooltip  the item tooltips on or off          /writs places    the hand-ins it has learnt (see below)
+/writs options  the addon's page in the game's options (Esc, Options, AddOns)
+/writs tour     the short tour of the panel again
 
 Known limits
 ------------
@@ -82,7 +84,7 @@ Known limits
 - A very big goal in 1 day (100 or so writs) makes the plan pause for a moment.
 - Fill only works out of combat.
 - Prices are kept for each realm and faction: a character on another realm scans its own.
-- 41 of the Artisan and Expert writs have no known hand-in yet (the table says "not known yet"), so they are not
+- 27 of the Artisan and Expert writs have no known hand-in yet (the table says "not known yet"), so they are not
   planned or routed. The game marks the place on your map once a writ has been used: buy one of those writs, use
   it, and the addon keeps where it goes. Type /writs places and send the lines in, and the next version routes
   them.

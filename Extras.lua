@@ -27,13 +27,18 @@ end
 
 local HOUSE = { 'prices', 'scanAt', 'fullAt', 'favorAt', 'favorFullAt' }
 local function houseKey()
-	local realm = (GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or 'realm'
+	local function named(f) local n = f and f(); return n ~= '' and n or nil end
+	local realm = named(GetNormalizedRealmName) or named(GetRealmName) or 'realm' .. (tostring(UnitGUID and UnitGUID('player') or ''):match('^Player%-(%d+)') or '')
 	return realm .. '-' .. ((UnitFactionGroup and UnitFactionGroup('player')) or 'Horde')
 end
 function ns.House(db)
 	local key = houseKey()
 	db.houses = db.houses or {}
 	if db.house == key then return key end
+	if db.house and db.house:find('^%-') and key:sub(-#db.house) == db.house then
+		db.house, db.houses[key] = key, nil
+		return key
+	end
 	if db.house then
 		local keep = {}
 		for _, f in ipairs(HOUSE) do keep[f] = db[f] end
@@ -513,13 +518,13 @@ function ns.Browse(mode)
 end
 
 ns.OnBuild = function(ui)
-	local b = S.Button(ui.frame, 'Browse all', 92, 22, function() ns.Browse() end)
-	b:SetPoint('BOTTOMRIGHT', ui.frame, 'TOPRIGHT', 0, -1)
+	local b = ui.browseBtn
+	if not b then return end
 	b:SetScript('OnEnter', function(self)
 		S.Box(self, C.hover, C.gold)
 		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
 		GameTooltip:AddLine('Browse all')
-		GameTooltip:AddLine('Every writ and Waylaid Crate with its prices, in a table you can sort.', 0.8, 0.8, 0.8, true)
+		GameTooltip:AddLine('Every writ and Waylaid Crate with its prices, in a table you can sort and buy from.', 1, 1, 1, true)
 		GameTooltip:Show()
 	end)
 	b:HookScript('OnLeave', function() GameTooltip:Hide() end)
@@ -598,7 +603,17 @@ function ns.Slash(arg)
 	end
 	if arg:match('^%s*guide') then
 		if ns.Nav and ns.Nav.Active() then ns.Nav.Stop(); say('the guide is stopped')
-		else say('no guide running. Open Route (the panel\'s title bar) and click Guide me.') end
+		else say('no guide running. Click Guide me on the panel.') end
+		return true
+	end
+	if arg:match('^%s*macro') then if ns.Macro then ns.Macro.Pickup() end return true end
+	if arg:match('^%s*tour') or arg:match('^%s*tutorial') or arg:match('^%s*help') then
+		if ns.UI and ns.UI.toggle then ns.UI.toggle(true) end
+		if ns.Tour and not ns.Tour.Start() then say('open the panel first (/writs)') end
+		return true
+	end
+	if arg:match('^%s*options') or arg:match('^%s*settings') or arg:match('^%s*config') then
+		if ns.Options then ns.Options.Open() end
 		return true
 	end
 	if arg:match('^%s*minimap') then
@@ -614,6 +629,8 @@ function ns.Slash(arg)
 	end
 	return false
 end
+
+ns.ShowMinimap = showButton
 
 local ev = CreateFrame('Frame')
 ev:RegisterEvent('PLAYER_LOGIN')

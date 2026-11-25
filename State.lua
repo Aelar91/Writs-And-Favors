@@ -106,7 +106,8 @@ State.LABEL = { Horde = { item = 280180, quest = 98248 }, Alliance = { item = 28
 function State.Label()
 	local l = D.label or State.LABEL[UnitFactionGroup and UnitFactionGroup('player') or 'Horde'] or State.LABEL.Horde
 	local onQuest = C_QuestLog and C_QuestLog.IsOnQuest and C_QuestLog.IsOnQuest(l.quest) or false
-	return { item = l.item, quest = l.quest, rep = 2000, done = questDone(l.quest) and true or false, held = (GetItemCount(l.item) or 0) > 0, onQuest = onQuest }
+	local bags = GetItemCount(l.item) or 0
+	return { item = l.item, quest = l.quest, rep = 2000, favor = 50, done = questDone(l.quest) and true or false, held = bags > 0, banked = (GetItemCount(l.item, true) or 0) > bags, onQuest = onQuest }
 end
 
 function State.ReadMail(db)
@@ -221,17 +222,99 @@ end
 
 function State.Start()
 	local map = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit('player')
-	for id, n in pairs(D.nodes) do if n[2] == map then return id end end
+	local pos = map and C_Map.GetPlayerMapPosition and C_Map.GetPlayerMapPosition(map, 'player')
+	local px, py
+	if pos and pos.GetXY then px, py = pos:GetXY() end
+	local best, bestD
+	for id, n in pairs(D.nodes) do
+		if n[2] == map then
+			local d = (px and n[3]) and ((n[3] - px * 100) ^ 2 + (n[4] - py * 100) ^ 2) or 0
+			if not best or d < bestD or (d == bestD and id < best) then best, bestD = id, d end
+		end
+	end
+	if best then return best end
 	local zone = GetMinimapZoneText and GetMinimapZoneText() or ''
 	for id, n in pairs(D.nodes) do if n[1] == zone then return id end end
 	return D.home or 23
 end
 
+function State.Flights(db)
+	local level = UnitLevel and UnitLevel('player') or 0
+	local c = db and State.Char(db)
+	if level <= 0 or not c then return nil, 0 end
+	local known, unread = {}, {}
+	for id, n in pairs(D.nodes) do
+		local cont = n[6] or 0
+		if c.taxiSeen and c.taxiSeen[cont] then
+			if c.taxi and c.taxi[id] then known[id] = true end
+		else
+			unread[cont] = true
+			if level >= ((ns.Plan and ns.Plan.ZONE_LEVEL or {})[n[2]] or 0) then known[id] = true end
+		end
+	end
+	local k = 0
+	for _ in pairs(unread) do k = k + 1 end
+	return known, k
+end
+function State.ReadTaxi(db)
+	local c = db and State.Char(db)
+	if not c then return end
+	local got, names = {}, {}
+	for id, n in pairs(D.nodes) do names[n[1]] = id end
+	if C_TaxiMap and C_TaxiMap.GetAllTaxiNodes and GetTaxiMapID then
+		local E = Enum and Enum.FlightPathState
+		local cur, reach = E and E.Current or 0, E and E.Reachable or 1
+		local ok, list = pcall(function() return C_TaxiMap.GetAllTaxiNodes(GetTaxiMapID()) end)
+		for _, t in ipairs(ok and type(list) == 'table' and list or {}) do
+			if (t.state == cur or t.state == reach) and D.nodes[t.nodeID] then got[t.nodeID] = true end
+		end
+	end
+	if not next(got) and NumTaxiNodes and TaxiNodeName and TaxiNodeGetType then
+		for i = 1, NumTaxiNodes() do
+			local kind = TaxiNodeGetType(i)
+			local id = names[(TaxiNodeName(i) or ''):match('^([^,]+)') or '']
+			if id and (kind == 'CURRENT' or kind == 'REACHABLE') then got[id] = true end
+		end
+	end
+	local id = next(got)
+	if not id then return end
+	local cont = D.nodes[id][6] or 0
+	c.taxi, c.taxiSeen = c.taxi or {}, c.taxiSeen or {}
+	for nid, n in pairs(D.nodes) do if (n[6] or 0) == cont then c.taxi[nid] = got[nid] or nil end end
+	c.taxiSeen[cont] = true
+	local k = 0
+	for _ in pairs(got) do k = k + 1 end
+	if ns.Log then ns.Log(('flight points: %d known on continent %d'):format(k, cont)) end
+end
+if D.nodes then
+	local xf = CreateFrame('Frame')
+	xf:RegisterEvent('TAXIMAP_OPENED')
+	xf:RegisterEvent('UI_INFO_MESSAGE')
+	xf:SetScript('OnEvent', function(_, event, _, msg)
+		if not ns.db then return end
+		if event == 'TAXIMAP_OPENED' then pcall(State.ReadTaxi, ns.db)
+		elseif msg and msg == rawget(_G, 'ERR_NEWTAXIPATH') then
+			local c = State.Char(ns.db)
+			local id = State.Start()
+			if c and id and c.taxiSeen and c.taxiSeen[D.nodes[id][6] or 0] then c.taxi[id] = true end
+		end
+	end)
+end
+
 local FAVOR_NAME = "merchant's favor"
+local FAVOR_ID = 3402
+local favorLooked
 function State.Favor(db)
 	if not (C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo) then return nil end
 	local id = db and db.favorCurrency
 	if not id then
+		local ok, info = pcall(C_CurrencyInfo.GetCurrencyInfo, FAVOR_ID)
+		if ok and info and info.name and info.name ~= '' then id = FAVOR_ID; if db then db.favorCurrency = id end end
+	end
+	if not id then
+		local now = GetTime and GetTime() or 0
+		if favorLooked and now - favorLooked < 60 then return nil end
+		favorLooked = now
 		if C_CurrencyInfo.GetCurrencyListSize and C_CurrencyInfo.GetCurrencyListInfo then
 			for i = 1, C_CurrencyInfo.GetCurrencyListSize() do
 				local info = C_CurrencyInfo.GetCurrencyListInfo(i)

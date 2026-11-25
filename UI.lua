@@ -54,7 +54,7 @@ local function unchecked()
 	return out
 end
 local function guardBuy(go)
-	if checkOK then return go() end
+	if checkOK or settings().remind == false then return go() end -- (turned off in the game's options: Options.lua)
 	local miss = unchecked()
 	if #miss == 0 then return go() end
 	if not checkWin then
@@ -65,18 +65,18 @@ local function guardBuy(go)
 		S.Box(w, C.panel, C.gold)
 		w.title = S.Text(w, 14, C.gold); w.title:SetPoint('TOPLEFT', 14, -12)
 		w.text = S.Text(w, 12, C.text); w.text:SetPoint('TOPLEFT', 14, -36); w.text:SetWidth(332); w.text:SetWordWrap(true); w.text:SetSpacing(3)
-		w.wait = S.Button(w, "I'll check first", 160, 28, function() w:Hide() end, true); w.wait:SetPoint('BOTTOMLEFT', 14, 12)
-		w.go = S.Button(w, 'Proceed anyway', 160, 28, function()
+		w.wait = S.Button(w, "Don't buy yet", 160, 28, function() w:Hide() end); w.wait:SetPoint('BOTTOMLEFT', 14, 12)
+		w.go = S.Button(w, 'Buy anyway', 160, 28, function()
 			checkOK = true
 			w:Hide()
 			if w.run then w.run() end
-		end); w.go:SetPoint('BOTTOMRIGHT', -14, 12)
+		end, true); w.go:SetPoint('BOTTOMRIGHT', -14, 12)
 		checkWin = w
 	end
 	local w = checkWin
 	local what = #miss == 2 and 'mailbox or your bank' or miss[1]
 	w.title:SetText('Check your ' .. (#miss == 2 and 'mailbox and bank' or miss[1]) .. ' first?')
-	w.text:SetText(('You haven\'t opened your %s today, so what\'s in %s isn\'t counted. You could buy writs, crates or items you already have.\n\nOpen %s once and the list updates by itself.'):format(what, #miss == 2 and 'them' or 'it', #miss == 2 and 'each' or 'it'))
+	w.text:SetText(('You haven\'t opened your %s today, so what\'s in %s isn\'t counted. You could buy writs, crates or items you already have.\n\nOpen %s once and the list updates by itself. Buy anyway?'):format(what, #miss == 2 and 'them' or 'it', #miss == 2 and 'each' or 'it'))
 	w.run = go
 	w:ClearAllPoints()
 	w:SetPoint('CENTER', UIParent, 'CENTER', 0, 80)
@@ -106,6 +106,8 @@ local function commas(n)
 	end
 end
 local function hex(c) return ('|cff%02x%02x%02x'):format(c[1] * 255, c[2] * 255, c[3] * 255) end
+local function nb(s) return (tostring(s):gsub(' ', '\194\160')) end
+local DOT = ' \194\183 '
 local GOLD, MUTED, GREEN, RED, WHITE = hex(C.gold), hex(C.muted), hex(C.green), hex(C.red), hex(C.text)
 local QUALITY = { [0] = '|cff9d9d9d', [1] = '|cffffffff', [2] = '|cff1eff00', [3] = '|cff0070dd', [4] = '|cffa335ee', [5] = '|cffff8000' }
 local dataQuality = {}
@@ -123,8 +125,21 @@ local function setStatus(msg, err) status, statusErr = msg, err; if msg then ns.
 local refresh
 
 local openMenu
+local ARROW_W = 20
 local function dropdown(parent, w, options, get, set)
 	local b = S.Button(parent, '', w, 24)
+	b.label:ClearAllPoints(); b.label:SetPoint('LEFT', 8, 0); b.label:SetJustifyH('LEFT')
+	local function fitLabel(bw) b.label:SetWidth(math.max(1, (bw or w) - ARROW_W - 12)) end
+	fitLabel(w)
+	b:SetScript('OnSizeChanged', function(_, bw) if bw and bw > ARROW_W + 12 then fitLabel(bw) end end)
+	local sep = b:CreateTexture(nil, 'ARTWORK')
+	sep:SetColorTexture(C.border[1], C.border[2], C.border[3], C.border[4] or 1)
+	sep:SetPoint('TOPRIGHT', -ARROW_W, -4); sep:SetPoint('BOTTOMRIGHT', -ARROW_W, 4); sep:SetWidth(1)
+	local arrow = b:CreateTexture(nil, 'OVERLAY')
+	arrow:SetTexture('Interface\\Buttons\\Arrow-Down-Up')
+	arrow:SetSize(12, 12); arrow:SetPoint('CENTER', b, 'RIGHT', -ARROW_W / 2, -3)
+	arrow:SetVertexColor(C.gold[1], C.gold[2], C.gold[3])
+	b.arrow = arrow
 	local menu = CreateFrame('Frame', nil, b)
 	menu:SetFrameStrata('DIALOG')
 	menu:SetPoint('TOPLEFT', b, 'BOTTOMLEFT', 0, -2)
@@ -156,7 +171,7 @@ local function dropdown(parent, w, options, get, set)
 		fill(); menu:Show(); openMenu = menu
 	end)
 	b.update = function()
-		for _, o in ipairs(options()) do if o.value == get() then b:SetText(o.text .. '  ' .. MUTED .. 'v|r') end end
+		for _, o in ipairs(options()) do if o.value == get() then b:SetText(o.text) end end
 	end
 	return b
 end
@@ -177,865 +192,38 @@ local function rowFrame(parent, i)
 		GameTooltip:Show()
 	end)
 	r:SetScript('OnLeave', function() GameTooltip:Hide() end)
-	r.name = S.Text(r, 12); r.name:SetPoint('LEFT', 28, 0); r.name:SetWidth(210); r.name:SetWordWrap(false)
-	r.rep = S.Text(r, 11, C.muted, 'RIGHT'); r.rep:SetPoint('RIGHT', -76, 0); r.rep:SetWidth(54)
+	r.name = S.Text(r, 12); r.name:SetPoint('LEFT', 28, 0); r.name:SetWidth(186); r.name:SetWordWrap(false)
+	r.rep = S.Text(r, 11, C.muted, 'RIGHT'); r.rep:SetPoint('RIGHT', -76, 0); r.rep:SetWidth(64); r.rep:SetWordWrap(false)
 	r.cost = S.Text(r, 12, C.text, 'RIGHT'); r.cost:SetPoint('RIGHT', -4, 0); r.cost:SetWidth(70)
 	return r
 end
-
-local ui_drawRoute, ui_drawHeld, ui_applyMapMode, ui_hideRoute, ui_openPicker
-local MAP_W, MAP_TOP, LIST_W = 1000, 40, 300
-local CONT = { [0] = 1415, [1] = 1414 }
-local CONT_NAME = { [1414] = 'Kalimdor', [1415] = 'Eastern Kingdoms' }
-local OM_W = 460
-local function omMode() return not FAVOR_ONLY and ns.OMRoute and ns.OMRoute.Available() and settings().routeMap ~= 'here' and true or false end
-local function LW() return ui and ui.omMode and (OM_W - 2 * PAD + 10) or LIST_W end
-local ORANGE = '|cffffa040'
-local function picksOf() local m = mine(); m.picks = m.picks or {}; return m.picks end
-local function candState(r)
-	local picked = picksOf()[r.writ]
-	if r.done then return 'done', MUTED .. 'handed in today|r' end
-	if not r.ready and not (r.writCost and r.itemCost) then return 'none', MUTED .. 'not on the AH|r' end
-	if picked then return 'picked', GREEN .. 'picked|r' end
-	if ui.inPlan and ui.inPlan[r.writ] then return 'planned', GOLD .. 'planned|r' end
-	if r.thin then return 'thin', ORANGE .. ('thin stock (%d up)'):format(math.min(r.writUp or 0, r.itemUp or 0)) .. '|r' end
-	return 'free', ''
-end
-local function candCost(r)
-	if r.ready then return 'held' end
-	if r.writCost and r.itemCost then return Plan.Money(r.writCost + r.itemCost) end
-	return '-'
-end
-local function candLine(r)
-	local _, words = candState(r)
-	return ('%s  %s%s|r  +%d%s'):format(r.name, WHITE, candCost(r), r.rep, words ~= '' and ('  ' .. words) or '')
-end
-local function perRep(r) if r.ready then return 0 end if r.writCost and r.itemCost then return (r.writCost + r.itemCost - r.pouch) / r.rep end end
-local function grossCost(r) if r.ready then return 0 end return (r.writCost or 0) + (r.itemCost or 0) end
-local function short(c)
-	c = math.floor((c or 0) / 100 + 0.5)
-	local g, sv = math.floor(c / 100), c % 100
-	if g > 0 then return sv > 0 and (g .. 'g ' .. sv .. 's') or (g .. 'g') end
-	return sv .. 's'
-end
+local ui_drawHeld
 local function valueColor(t)
 	t = math.max(0, math.min(1, t or 0.5))
 	if t < 0.5 then local k = t / 0.5; return { 0.3 + 0.7 * k, 0.9 - 0.05 * k, 0.35 - 0.15 * k } end
 	local k = (t - 0.5) / 0.5
 	return { 1, 0.85 - 0.55 * k, 0.2 + 0.05 * k }
 end
-local function colorHex(c) return ('|cff%02x%02x%02x'):format(math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255)) end
-local function swatch(c) return ('|TInterface\\Buttons\\WHITE8X8:9:9:0:0:8:8:0:8:0:8:%d:%d:%d|t'):format(math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255)) end
 local STATE_COLOR = { picked = { 0.45, 1, 0.6 }, thin = { 1, 0.63, 0.25 }, done = { 0.55, 0.55, 0.55 }, none = { 0.6, 0.16, 0.14 } }
 ns.writColors = { value = valueColor, state = STATE_COLOR }
-
-local function pickTotals()
-	local rows = plan and plan.rows
-	local set = picksOf()
-	local n, repSum, gold, ws = 0, 0, 0, {}
-	for _, r in ipairs(rows or {}) do
-		if set[r.writ] and not r.done and r.place and (r.ready or r.cost) then
-			n, repSum = n + 1, repSum + r.rep
-			gold = gold + (r.ready and -r.pouch or (r.writCost or 0) + (r.itemCost or 0))
-			ws[#ws + 1] = r
-		end
-	end
-	if n == 0 then return nil end
-	local key = {}
-	for _, r in ipairs(ws) do key[#key + 1] = r.writ end
-	key = table.concat(key, ',')
-	if ui.pickRouteKey ~= key then
-		local _, class = UnitClass('player')
-		local ok, route = pcall(Plan.Route, { writs = ws, start = State.Start(), bags = bagCap(), hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE' })
-		ui.pickRouteKey, ui.pickMin = key, ok and route and math.floor(route.total / 60 + 0.5) or nil
-	end
-	return ('Picks: %d writ%s, +%s rep, %s to buy%s'):format(n, n == 1 and '' or 's', commas(repSum), Plan.Money(gold), ui.pickMin and (', about ' .. ui.pickMin .. ' min') or '')
-end
-
-local nodeByName = {}
-for _, n in pairs(D.nodes) do nodeByName[n[1]] = n end
-local function contPos(map, x, y)
-	if not (map and x and C_Map and C_Map.GetWorldPosFromMapPos and C_Map.GetMapPosFromWorldPos and CreateVector2D) then return end
-	local ok, inst, world = pcall(C_Map.GetWorldPosFromMapPos, map, CreateVector2D(x / 100, y / 100))
-	if not (ok and inst and world and CONT[inst]) then return end
-	local ok2, _, pos = pcall(C_Map.GetMapPosFromWorldPos, inst, world, CONT[inst])
-	if not (ok2 and pos) then return end
-	return { c = CONT[inst], x = pos.x, y = pos.y, map = map, zx = x, zy = y }
-end
-local ZMAX, ZONE_ART, CLUSTER_PX = 16, 0.55, 26
-local HILITE = { 0.35, 1, 0.55, 1 }
-local function artLayer(mapID)
-	if not (C_Map and C_Map.GetMapArtLayers and C_Map.GetMapArtLayerTextures) then return end
-	local ok, layers = pcall(C_Map.GetMapArtLayers, mapID)
-	local L = ok and type(layers) == 'table' and layers[1]
-	if not (L and L.layerWidth and L.tileWidth) then return end
-	local ok2, ids = pcall(C_Map.GetMapArtLayerTextures, mapID, 1)
-	if not (ok2 and type(ids) == 'table' and #ids > 0) then return end
-	return L, ids
-end
-local function tileArt(m, pool, L, ids, x, y, w, h, view, sub)
-	local cols = math.ceil(L.layerWidth / L.tileWidth)
-	local sx, sy = w / L.layerWidth, h / L.layerHeight
-	local tw, th = L.tileWidth * sx, L.tileHeight * sy
-	local n = 0
-	for i, fid in ipairs(ids) do
-		local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
-		local tx, ty = x + col * tw, y + row * th
-		local cw, ch = math.min(L.tileWidth, L.layerWidth - col * L.tileWidth), math.min(L.tileHeight, L.layerHeight - row * L.tileHeight)
-		if cw > 0 and ch > 0 and tx < view.r and tx + cw * sx > view.l and ty < view.b and ty + ch * sy > view.t then
-			n = n + 1
-			local t = m[pool][n]
-			if not t then t = m.art:CreateTexture(nil, 'BACKGROUND', nil, sub); m[pool][n] = t end
-			t:SetTexture(fid, nil, nil, 'TRILINEAR')
-			t:SetSize(cw * sx, ch * sy)
-			t:SetTexCoord(0, cw / L.tileWidth, 0, ch / L.tileHeight)
-			t:ClearAllPoints(); t:SetPoint('TOPLEFT', m.art, 'TOPLEFT', tx, -ty)
-			t:Show()
-		end
-	end
-	for i = n + 1, #m[pool] do m[pool][i]:Hide() end
-	return n
-end
-local zoneCache = {}
-local function zonesOf(cont)
-	if zoneCache[cont] then return zoneCache[cont] end
-	local out, seen = {}, {}
-	local function add(id, name)
-		if not id or seen[id] or not (C_Map and C_Map.GetMapRectOnMap) then return end
-		seen[id] = true
-		local ok, l, r, t, b = pcall(C_Map.GetMapRectOnMap, id, cont)
-		if ok and l and r and t and b and r > l and b > t and r - l < 0.9 then out[#out + 1] = { id = id, name = name, l = l, r = r, t = t, b = b } end
-	end
-	if C_Map and C_Map.GetMapChildrenInfo then
-		local ok, kids = pcall(C_Map.GetMapChildrenInfo, cont, (Enum and Enum.UIMapType and Enum.UIMapType.Zone) or 3)
-		if ok and type(kids) == 'table' then for _, k in ipairs(kids) do add(k.mapID, k.name) end end
-	end
-	for _, pl in ipairs(D.places) do add(pl[3], pl[2]) end
-	zoneCache[cont] = out
-	return out
-end
-local function zoneAt(cont, x, y)
-	local zones = zonesOf(cont)
-	if C_Map and C_Map.GetMapInfoAtPosition then
-		local ok, info = pcall(C_Map.GetMapInfoAtPosition, cont, x, y)
-		if ok and type(info) == 'table' then for _, z in ipairs(zones) do if z.id == info.mapID then return z end end end
-	end
-	local best
-	for _, z in ipairs(zones) do
-		if x >= z.l and x <= z.r and y >= z.t and y <= z.b and (not best or (z.r - z.l) * (z.b - z.t) < (best.r - best.l) * (best.b - best.t)) then best = z end
-	end
-	return best
-end
-
-local STYLE = { ride = { 0.92, 0.92, 0.92, 0.85 }, fly = C.gold, boat = { 0.45, 0.75, 1, 1 } }
-local function useLine(m)
-	if not m.art.CreateLine then return nil end
-	m.li = m.li + 1
-	local l = m.lines[m.li]
-	if not l then l = m.art:CreateLine(nil, 'ARTWORK'); m.lines[m.li] = l end
-	return l
-end
-local function useSq(m)
-	m.si = m.si + 1
-	local t = m.sqs[m.si]
-	if not t then t = m.art:CreateTexture(nil, 'ARTWORK'); m.sqs[m.si] = t end
-	return t
-end
-local function clip(a, b, v)
-	local x0, y0, dx, dy = a.x, a.y, b.x - a.x, b.y - a.y
-	local t0, t1 = 0, 1
-	for _, pq in ipairs({ { -dx, x0 - v.l }, { dx, v.r - x0 }, { -dy, y0 - v.t }, { dy, v.b - y0 } }) do
-		local p, q = pq[1], pq[2]
-		if p == 0 then if q < 0 then return end
-		else
-			local r = q / p
-			if p < 0 then if r > t1 then return end if r > t0 then t0 = r end
-			else if r < t0 then return end if r < t1 then t1 = r end end
-		end
-	end
-	return { x = x0 + dx * t0, y = y0 + dy * t0 }, { x = x0 + dx * t1, y = y0 + dy * t1 }
-end
-local function seg(m, a, b, style, view, rec)
-	a, b = clip(a, b, view)
-	if not a then return end
-	local c = STYLE[style] or STYLE.ride
-	local dx, dy = b.x - a.x, b.y - a.y
-	local len = math.sqrt(dx * dx + dy * dy)
-	if len < 1 then return end
-	if style == 'boat' then
-		for d = 0, len, 7 do
-			local t = useSq(m)
-			t:SetColorTexture(c[1], c[2], c[3], 1); t:SetSize(3, 3)
-			t:ClearAllPoints(); t:SetPoint('CENTER', m.art, 'TOPLEFT', a.x + dx * d / len, -(a.y + dy * d / len)); t:Show()
-			rec[#rec + 1] = { t, 'sq', c }
-		end
-		return
-	end
-	local on, off = (style == 'fly') and 8 or len, (style == 'fly') and 5 or 0
-	local d = 0
-	while d < len do
-		local e = math.min(len, d + on)
-		local l = useLine(m)
-		if not l then return end
-		l:SetThickness(2)
-		l:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
-		l:SetStartPoint('TOPLEFT', m.art, a.x + dx * d / len, -(a.y + dy * d / len))
-		l:SetEndPoint('TOPLEFT', m.art, a.x + dx * e / len, -(a.y + dy * e / len))
-		l:Show()
-		rec[#rec + 1] = { l, 'line', c }
-		d = e + off
-	end
-end
-local function useFrame(m, pool, make)
-	m[pool .. 'i'] = (m[pool .. 'i'] or 0) + 1
-	local f = m[pool][m[pool .. 'i']]
-	if not f then
-		f = make()
-		m[pool][m[pool .. 'i']] = f
-		f:EnableMouse(true)
-		f:SetScript('OnEnter', function(self)
-			if self.hover then self.hover(true) end
-			GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
-			for i, line in ipairs(self.tip or {}) do GameTooltip:AddLine(line, 1, i == 1 and 0.78 or 1, i == 1 and 0.25 or 1, true) end
-			GameTooltip:Show()
-		end)
-		f:SetScript('OnLeave', function(self) if self.hover then self.hover(false) end GameTooltip:Hide() end)
-		f:SetScript('OnMouseUp', function(self, btn) if self.click and btn ~= 'RightButton' then self.click() end end)
-	end
-	f.hover, f.click, f.tip = nil, nil, nil
-	f:Show()
-	return f
-end
-local function stopFrame(m)
-	local d = CreateFrame('Frame', nil, m.art)
-	d:SetSize(18, 18)
-	S.Box(d, C.gold, { 0, 0, 0, 1 })
-	d.n = S.Text(d, 11, { 0.05, 0.05, 0.05 }, 'CENTER'); d.n:SetPoint('CENTER'); d.n:SetShadowOffset(0, 0)
-	d.badge = CreateFrame('Frame', nil, d)
-	d.badge:SetSize(14, 14); d.badge:SetPoint('BOTTOMLEFT', d, 'TOPRIGHT', -4, -4)
-	S.Box(d.badge, { 0.1, 0.1, 0.1, 1 }, C.gold)
-	d.badge.n = S.Text(d.badge, 9, C.text, 'CENTER'); d.badge.n:SetPoint('CENTER')
-	return d
-end
-local function clusterFrame(m)
-	local g = CreateFrame('Frame', nil, m.art)
-	g:SetSize(80, 18)
-	S.Box(g, C.gold, { 0, 0, 0, 1 })
-	g.t = S.Text(g, 11, { 0.05, 0.05, 0.05 }, 'CENTER'); g.t:SetPoint('CENTER'); g.t:SetShadowOffset(0, 0)
-	return g
-end
-local function legFrame(m)
-	local g = CreateFrame('Frame', nil, m.art)
-	g:SetSize(40, 14)
-	S.Box(g, { 0.05, 0.05, 0.05, 0.8 }, { 0, 0, 0, 0 })
-	g.t = S.Text(g, 10, C.text, 'CENTER'); g.t:SetPoint('CENTER')
-	return g
-end
-local function zoneLabel(m)
-	m.zli = m.zli + 1
-	local t = m.zlabels[m.zli]
-	if not t then
-		t = m.art:CreateFontString(nil, 'ARTWORK')
-		if not t:SetFont(S.Font(), 13, 'OUTLINE') then t:SetFont(STANDARD_TEXT_FONT, 13, 'OUTLINE') end
-		t:SetTextColor(1, 0.92, 0.75); t:SetAlpha(0.55)
-		m.zlabels[m.zli] = t
-	end
-	t:Show()
-	return t
-end
-
 local function shownRoute()
 	if ui.mapSource == 'held' then return ui.heldRoute end
 	return plan and plan.route
 end
 
-local function viewSize(m)
-	local w, h = m:GetWidth(), m:GetHeight()
-	if not w or w <= 0 then w = MAP_W - LIST_W - 2 * PAD - 8 end
-	if not h or h <= 0 then h = ((ui.mapWin and ui.mapWin:GetHeight()) or 640) - MAP_TOP - PAD - 8 end
-	return w, h
+local function useFlights()
+	if not (ns.Net and D.G) then return 0 end
+	local known, unread = State.Flights(db)
+	if ns.Net.Use(known) then ns.Log('flight points: ' .. ns.Net.Key()) end
+	return unread or 0
 end
-local function baseSize(m, L)
-	local vw, vh = viewSize(m)
-	local fit = math.min(vw / L.layerWidth, vh / L.layerHeight)
-	return L.layerWidth * fit, L.layerHeight * fit, vw, vh
+local function labelNeedsCrate(label, mail)
+	if label.done or label.held or label.onQuest or label.banked then return false end
+	mail = mail or ((State.Char(db) or {}).mail or {})
+	return not ((mail[label.item] or 0) > 0)
 end
-local function fitView(pts, cont)
-	local v = { cont = cont, cx = 0.5, cy = 0.5, z = 1 }
-	local L = artLayer(cont)
-	if not (L and #pts > 0) then return v end
-	local aw, ah, vw, vh = baseSize(ui.map, L)
-	local x0, x1, y0, y1 = 1, 0, 1, 0
-	for _, p in ipairs(pts) do x0, x1, y0, y1 = math.min(x0, p.x), math.max(x1, p.x), math.min(y0, p.y), math.max(y1, p.y) end
-	local sw, sh = math.max(x1 - x0, 0.03) * 1.3 + 0.02, math.max(y1 - y0, 0.03) * 1.3 + 0.02
-	v.z = math.max(1, math.min(ZMAX, math.min(vw / (sw * aw), vh / (sh * ah))))
-	v.cx, v.cy = (x0 + x1) / 2, (y0 + y1) / 2
-	return v
-end
-
-local mapRender
-local function hiLeg(li, on)
-	if ui.omMode then return ns.OMRoute.Highlight(li, on) end
-	local d = ui.mapData
-	local leg = d and d.legs[li]
-	if not leg then return end
-	for _, r in ipairs(leg.drawn or {}) do
-		local o, kind, c = r[1], r[2], on and HILITE or r[3]
-		if kind == 'line' then o:SetThickness(on and 4 or 2); o:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
-		else o:SetSize(on and 5 or 3, on and 5 or 3); o:SetColorTexture(c[1], c[2], c[3], 1) end
-	end
-	if leg.label then S.Box(leg.label, on and { 0.1, 0.3, 0.15, 0.95 } or { 0.05, 0.05, 0.05, 0.8 }, on and HILITE or { 0, 0, 0, 0 }) end
-	for _, i in ipairs({ li - 1, li }) do
-		local s = i == 0 and d.start or d.stops[i]
-		local f = s and s.frame
-		if f then S.Box(f, on and HILITE or C.gold, { 0, 0, 0, 1 }) end
-	end
-end
-local function mapGo(pos, z)
-	if not pos then return end
-	if ui.omMode then return ns.OMRoute.Go(pos) end
-	if pos.c ~= ui.mapCont then ui.mapContPicked = pos.c; ui.drawRoute() end
-	local v = ui.mapView
-	if not v then return end
-	v.cx, v.cy, v.z = pos.x, pos.y, math.max(v.z, z or 6)
-	mapRender()
-end
-local function zoomAround(f, mx, my)
-	local m, v = ui.map, ui.mapView
-	if not (v and m.aw) then return end
-	mx, my = mx or m.vw / 2, my or m.vh / 2
-	local px, py = (m.ox + mx) / m.aw, (m.oy + my) / m.ah
-	local z = math.max(1, math.min(ZMAX, v.z * f))
-	if z == v.z then return end
-	local aw, ah = m.aw * z / v.z, m.ah * z / v.z
-	v.z = z
-	v.cx, v.cy = (px * aw - mx + m.vw / 2) / aw, (py * ah - my + m.vh / 2) / ah
-	mapRender()
-end
-
-mapRender = function()
-	local m, d, v = ui.map, ui.mapData, ui.mapView
-	m.li, m.si, m.stopsi, m.legsi, m.clustersi, m.zli = 0, 0, 0, 0, 0, 0
-	for _, l in ipairs(m.lines) do l:Hide() end
-	for _, t in ipairs(m.sqs) do t:Hide() end
-	m.othersi, m.oclustersi = 0, 0
-	m.others, m.oclusters = m.others or {}, m.oclusters or {}
-	for _, pool in ipairs({ m.stops, m.legs, m.clusters, m.zlabels, m.others, m.oclusters }) do for _, f in ipairs(pool) do f:Hide() end end
-	if not (d and v) then for _, t in ipairs(m.tiles) do t:Hide() end for _, t in ipairs(m.ztiles) do t:Hide() end return end
-	local L, ids = artLayer(d.cont)
-	m.none:SetShown(not L)
-	m.none:SetText("The map isn't available here; the steps are on the left.")
-	if not L then return end
-	local aw0, ah0, vw, vh = baseSize(m, L)
-	local aw, ah = aw0 * v.z, ah0 * v.z
-	local function hold(c, a, vs) if a <= vs then return 0.5 end local h = vs / 2 / a; return math.max(h, math.min(1 - h, c)) end
-	v.cx, v.cy = hold(v.cx, aw, vw), hold(v.cy, ah, vh)
-	local ox, oy = v.cx * aw - vw / 2, v.cy * ah - vh / 2
-	m.aw, m.ah, m.ox, m.oy, m.vw, m.vh = aw, ah, ox, oy, vw, vh
-	m.art:SetSize(aw, ah)
-	m.art:ClearAllPoints(); m.art:SetPoint('TOPLEFT', m, 'TOPLEFT', -ox, oy)
-	local near = { l = ox - vw / 2, r = ox + vw * 1.5, t = oy - vh / 2, b = oy + vh * 1.5 }
-	local inView = function(x, y) return x >= ox - 20 and x <= ox + vw + 20 and y >= oy - 20 and y <= oy + vh + 20 end
-	tileArt(m, 'tiles', L, ids, 0, 0, aw, ah, near, 0)
-	m.zone = nil
-	local z = v.z > 1.5 and zoneAt(d.cont, v.cx, v.cy)
-	if z and (z.r - z.l) * aw >= vw * ZONE_ART then
-		local ZL, zids = artLayer(z.id)
-		if ZL then tileArt(m, 'ztiles', ZL, zids, z.l * aw, z.t * ah, (z.r - z.l) * aw, (z.b - z.t) * ah, near, 1); m.zone = z end
-	end
-	if not m.zone then for _, t in ipairs(m.ztiles) do t:Hide() end end
-	for _, zn in ipairs(zonesOf(d.cont)) do
-		local zx, zy = (zn.l + zn.r) / 2 * aw, (zn.t + zn.b) / 2 * ah
-		if (zn.r - zn.l) * aw >= 90 and inView(zx, zy) and zn.name then
-			local t = zoneLabel(m)
-			t:SetText(zn.name)
-			t:ClearAllPoints(); t:SetPoint('CENTER', m.art, 'TOPLEFT', zx, -zy)
-		end
-	end
-	local function P(p) return p and p.c == d.cont and { x = p.x * aw, y = p.y * ah } or nil end
-	for li, leg in ipairs(d.legs) do
-		leg.drawn, leg.label = {}, nil
-		for _, s in ipairs(leg.segs) do
-			local a, b = P(s[1]), P(s[2])
-			if a and b then seg(m, a, b, s[3], near, leg.drawn) end
-		end
-		local a, b = P(leg.from), P(leg.to)
-		if a and b then
-			local mx, my = (a.x + b.x) / 2, (a.y + b.y) / 2
-			if math.sqrt((b.x - a.x) ^ 2 + (b.y - a.y) ^ 2) >= 56 and inView(mx, my) then
-				local g = useFrame(m, 'legs', function() return legFrame(m) end)
-				g.t:SetText(leg.min .. ' min')
-				g:ClearAllPoints(); g:SetPoint('CENTER', m.art, 'TOPLEFT', mx, -my)
-				g.tip = leg.tip
-				g.hover = function(on) hiLeg(li, on) end
-				S.Box(g, { 0.05, 0.05, 0.05, 0.8 }, { 0, 0, 0, 0 })
-				leg.label = g
-			end
-		end
-	end
-	local level = (m.art:GetFrameLevel() or 1) + 5
-	local groups = {}
-	for _, st in ipairs(d.stops) do
-		st.frame = nil
-		local q = P(st.pos)
-		if q then
-			local g
-			if v.z < ZMAX then
-				for _, c in ipairs(groups) do if (c.x - q.x) ^ 2 + (c.y - q.y) ^ 2 < CLUSTER_PX ^ 2 then g = c; break end end
-			end
-			if g then g.members[#g.members + 1] = st
-			else groups[#groups + 1] = { x = q.x, y = q.y, members = { st } } end
-		end
-	end
-	local function stopAt(s, q, label, badge)
-		local f = useFrame(m, 'stops', function() return stopFrame(m) end)
-		f:ClearAllPoints(); f:SetPoint('CENTER', m.art, 'TOPLEFT', q.x, -q.y)
-		f.n:SetText(label)
-		f.badge:SetShown(badge ~= nil)
-		if badge then f.badge.n:SetText(badge) end
-		f.tip = s.tip
-		f:SetFrameLevel(level)
-		S.Box(f, C.gold, { 0, 0, 0, 1 })
-		s.frame = f
-		return f
-	end
-	local sq = P(d.start.pos)
-	d.start.frame = nil
-	if sq then stopAt(d.start, sq, 'S').click = function() mapGo(d.start.pos, 6) end end
-	for _, g in ipairs(groups) do
-		if #g.members == 1 then
-			local s = g.members[1]
-			local f = stopAt(s, g, tostring(s.n), s.badge)
-			f.hover = function(on) hiLeg(s.n, on) end
-			f.click = function() if s.pick then s.pick() else mapGo(s.pos, math.min(ZMAX, (ui.mapView.z or 1) * 2)) end end
-		else
-			local hand, zones, zname, x, y = 0, {}, nil, 0, 0
-			local tip = {}
-			for _, s in ipairs(g.members) do
-				local q = P(s.pos)
-				x, y = x + q.x, y + q.y
-				hand = hand + (s.hand or 0)
-				if s.zone and not zones[s.zone] then zones[s.zone] = true; zname = zname and '' or s.zone end
-				tip[#tip + 1] = s.tip[1] .. (s.hand and s.hand > 0 and (': ' .. s.hand .. ' hand-in' .. (s.hand > 1 and 's' or '')) or '')
-			end
-			x, y = x / #g.members, y / #g.members
-			local c = useFrame(m, 'clusters', function() return clusterFrame(m) end)
-			local text = (zname and zname ~= '' and zname or (#g.members .. ' stops')) .. ': ' .. hand .. ' hand-in' .. (hand == 1 and '' or 's')
-			c.t:SetText(text)
-			c:SetSize(math.max(60, (c.t:GetStringWidth() or #text * 6) + 14), 18)
-			c:ClearAllPoints(); c:SetPoint('CENTER', m.art, 'TOPLEFT', x, -y)
-			c:SetFrameLevel(level + 1)
-			table.insert(tip, 1, ('Stops %s (click to zoom in)'):format(table.concat((function() local n = {}; for _, s in ipairs(g.members) do n[#n + 1] = s.n end; return n end)(), ', ')))
-			c.tip = tip
-			local pts = {}
-			for _, s in ipairs(g.members) do pts[#pts + 1] = s.pos; s.frame = c end
-			c.click = function()
-				local nv = fitView(pts, d.cont)
-				nv.z = math.max(nv.z, math.min(ZMAX, v.z * 2))
-				ui.mapView = nv; nv.key = v.key
-				mapRender()
-			end
-		end
-	end
-	local og = {}
-	for _, o in ipairs(d.others or {}) do
-		local q = P(o.pos)
-		if q then
-			local g
-			if v.z < ZMAX then for _, c in ipairs(og) do if (c.x - q.x) ^ 2 + (c.y - q.y) ^ 2 < CLUSTER_PX ^ 2 then g = c; break end end end
-			if g then g.members[#g.members + 1] = o else og[#og + 1] = { x = q.x, y = q.y, members = { o } } end
-		end
-	end
-	for _, g in ipairs(og) do
-		if #g.members == 1 then
-			local o = g.members[1]
-			local f = useFrame(m, 'others', function() local x = stopFrame(m); x:SetSize(14, 14); x.badge:Hide(); return x end)
-			f:ClearAllPoints(); f:SetPoint('CENTER', m.art, 'TOPLEFT', g.x, -g.y)
-			f.n:SetText(tostring(o.n)); f.badge:Hide()
-			S.Box(f, o.picked and HILITE or { 0.62, 0.62, 0.62, o.open and 0.9 or 0.45 }, { 0, 0, 0, 1 })
-			f:SetAlpha(o.open and 1 or 0.6)
-			f:SetFrameLevel(level - 2)
-			f.tip, f.click = o.tip, o.pick
-		else
-			local c = useFrame(m, 'oclusters', function() local x = clusterFrame(m); return x end)
-			local n, x, y, pts = 0, 0, 0, {}
-			for _, o in ipairs(g.members) do local q = P(o.pos); x, y = x + q.x, y + q.y; n = n + o.n; pts[#pts + 1] = o.pos end
-			c.t:SetText(n .. ' other writs')
-			c:SetSize(math.max(60, (c.t:GetStringWidth() or 60) + 14), 16)
-			S.Box(c, { 0.55, 0.55, 0.55, 0.85 }, { 0, 0, 0, 1 })
-			c:ClearAllPoints(); c:SetPoint('CENTER', m.art, 'TOPLEFT', x / #g.members, -y / #g.members)
-			c:SetFrameLevel(level - 1)
-			c.tip = { n .. ' other writs here: click to zoom in' }
-			c.click = function() local nv = fitView(pts, d.cont); nv.z = math.max(nv.z, math.min(ZMAX, v.z * 2)); nv.key = v.key; ui.mapView = nv; mapRender() end
-		end
-	end
-	ui.mapZoomText:SetText(('x%.1f'):format(v.z))
-end
-
-local function routeShown() return ui.mapWin and (ui.mapWin:IsShown() or (ui.omMode and ns.OMRoute and ns.OMRoute.IsOn())) end
-ui_drawRoute = function()
-	local w = ui.mapWin
-	if not routeShown() then return end
-	local route = shownRoute()
-	local m = ui.map
-	if ui.segAuto then
-		local heldMode, mineMode = ui.mapSource == 'held', mine().planMode == 'picks'
-		local edge = { C.gold[1] * 0.7, C.gold[2] * 0.7, C.gold[3] * 0.7, 1 }
-		for b, on in pairs({ [ui.segAuto] = not heldMode and not mineMode, [ui.segMine] = not heldMode and mineMode, [ui.segHeld] = heldMode }) do
-			local text = b == ui.segAuto and 'Auto plan' or b == ui.segMine and 'Pick my own' or 'Hand in what I have'
-			b:SetText((on and GOLD or WHITE) .. text .. '|r')
-			S.Box(b, on and C.hover or C.panel, on and edge or C.border)
-		end
-		S.Box(ui.showAll.box, settings().showOthers ~= false and C.gold or { 0.08, 0.08, 0.08, 1 }, C.border)
-		ui.modeLine:SetText(heldMode and 'Writs in your bags, mail and bank: their route, nothing to buy.'
-			or mineMode and 'Only the writs you pick on the map: nothing chosen for you.'
-			or 'Planned from your goal and the AH prices: the writs chosen for you.')
-		local totals = pickTotals()
-		ui.pickTotals:SetText(totals or (MUTED .. (mineMode and 'Nothing picked: click writs on the map to pick them.' or 'Click a writ on the map to add it to the plan.') .. '|r'))
-		ui.pickClear:SetShown(totals ~= nil)
-	end
-	local hr = ui.heldInfo
-	if ui.mapSource == 'held' and hr then
-		local extra = {}
-		if #hr.needItem > 0 then extra[#extra + 1] = #hr.needItem .. ' need their item' end
-		if #hr.noPlace > 0 then extra[#extra + 1] = #hr.noPlace .. ' with no known hand-in' end
-		if #hr.doneToday > 0 then extra[#extra + 1] = #hr.doneToday .. ' already handed in today (tomorrow)' end
-		ui.mapSummary:SetText(route and (('%d writs held: this route, %d min, +%s rep%s'):format(#hr.writs, math.floor(route.total / 60 + 0.5), commas(hr.rep), #extra > 0 and ('. ' .. table.concat(extra, ', ')) or ''))
-			or ('Nothing held to hand in now' .. (#extra > 0 and (': ' .. table.concat(extra, ', ')) or '.')))
-	else
-		local text
-		if route then
-			local days = settings().days
-			local who = mine().planMode == 'picks' and 'Your picks' or (days > 1 and ('Auto: day 1 of ' .. days .. ', for ' .. (State.GOALS[settings().goal] or {})[1]) or ('Auto: today, for ' .. (State.GOALS[settings().goal] or {})[1]))
-			local writs = 0
-			for _, l in ipairs(route.legs) do if not l.mail then writs = writs + #l.writs end end
-			text = ('%s%s|r: %d writs, %d stops, about %d min, %s in flights'):format(WHITE, who, writs, #route.legs, math.floor(route.total / 60 + 0.5), Plan.Money(route.fares))
-			local list = Buy.List()
-			local wl, il = 0, 0
-			for _, e in ipairs(list or {}) do
-				local left = e.need - e.bought
-				if left > 0 then if e.writ then wl = wl + left else il = il + left end end
-			end
-			if wl + il > 0 then
-				text = text .. '\n' .. ORANGE .. ('Buy first: %d writ%s and %d item%s (BUY LIST, at the AH). The route starts at a mailbox to collect them.'):format(wl, wl == 1 and '' or 's', il, il == 1 and '' or 's') .. '|r'
-			else
-				text = text .. '\n' .. GREEN .. 'Everything bought or held: collect any mail on the way, and go.|r'
-			end
-		else
-			text = plan and plan.mine and 'Nothing picked yet: every writ is on the map. Click one to pick it; its shopping list and route follow.' or 'Plan first: the route shows here.'
-		end
-		ui.mapSummary:SetText(text)
-	end
-	local steps = route and Plan.RouteSteps(route) or {}
-	ui.inPlan = {}
-	if plan and plan.days and plan.days[1] then for _, pk in ipairs(plan.days[1].writs) do ui.inPlan[pk.writ] = true end end
-	local byPlace = {}
-	if plan and plan.rows and ui.mapSource ~= 'held' then
-		for _, r in ipairs(plan.rows) do
-			if r.place and r.rep > 0 then byPlace[r.place] = byPlace[r.place] or {}; table.insert(byPlace[r.place], r) end
-		end
-	end
-	ui.byPlace = byPlace
-	local vals = {}
-	for _, list in pairs(byPlace) do
-		for _, r in ipairs(list) do
-			local st_ = candState(r)
-			if st_ ~= 'done' and st_ ~= 'none' and not r.ready then vals[#vals + 1] = perRep(r) end
-		end
-	end
-	table.sort(vals)
-	local function valueT(x)
-		if not x or #vals < 2 then return 0.5 end
-		local lo = 0
-		for _, v in ipairs(vals) do if v < x then lo = lo + 1 end end
-		return lo / (#vals - 1)
-	end
-	local function placeSum(list)
-		local sm = { n = 0, cost = 0, net = 0, rep = 0, open = {}, done = 0, none = 0, picked = 0, thin = 0, free = 0 }
-		for _, r in ipairs(list) do
-			local st_ = candState(r)
-			if st_ == 'done' then sm.done = sm.done + 1
-			elseif st_ == 'none' then sm.none = sm.none + 1
-			else
-				sm.n, sm.cost, sm.rep = sm.n + 1, sm.cost + grossCost(r), sm.rep + r.rep
-				sm.net = sm.net + (perRep(r) or 0) * r.rep
-				sm.open[#sm.open + 1] = r
-				if st_ == 'picked' then sm.picked = sm.picked + 1 elseif st_ == 'thin' then sm.thin = sm.thin + 1 else sm.free = sm.free + 1 end
-				local pr = perRep(r)
-				if pr and (not sm.bestPer or pr < sm.bestPer) then sm.best, sm.bestPer = r, pr end
-			end
-		end
-		sm.state = sm.picked > 0 and 'picked' or sm.free > 0 and 'avail' or sm.thin > 0 and 'thin' or (sm.done > 0 and sm.none == 0) and 'done' or 'none'
-		sm.color = STATE_COLOR[sm.state] or valueColor(valueT(sm.bestPer))
-		sm.value = valueColor(valueT(sm.bestPer))
-		sm.label = sm.best and (sm.best.ready and 'held' or short(grossCost(sm.best))) or nil
-		return sm
-	end
-	local function placeTip(place, title)
-		local tip = { title }
-		for _, r in ipairs(byPlace[place] or {}) do tip[#tip + 1] = candLine(r) end
-		tip[#tip + 1] = MUTED .. 'Click: pick writs here|r'
-		return tip
-	end
-	local stops = {}
-	for _, st in ipairs(steps) do
-		if st.row then
-			stops[#stops + 1] = st
-			st.n = #stops
-			local pl = D.places[st.row]
-			st.pos = contPos(pl[3], pl[4], pl[5])
-			st.zone = pl[2]
-			st.hand = st.kind == 'stop' and (#(st.writs or {}) + (st.label and 1 or 0)) or 0
-			st.badge = st.kind == 'mail' and 'M' or tostring(st.hand)
-			st.tip = { st.n .. '. ' .. (st.text:match('^[^:]+') or '') }
-			for _, wr in ipairs(st.writs or {}) do st.tip[#st.tip + 1] = (wr.n > 1 and (wr.n .. ' x ') or '') .. wr.itemName end
-			if st.label then st.tip[#st.tip + 1] = 'Shipping Label (+2,000)' end
-			if byPlace[st.row] and st.kind == 'stop' then
-				local place = st.row
-				st.tip = placeTip(place, st.tip[1])
-				st.pick = function() ui.openPicker(place) end
-			end
-		end
-	end
-	local others = {}
-	local nonePicked = mine().planMode == 'picks' and not (plan and plan.picks and #plan.picks > 0)
-	if settings().showOthers ~= false or nonePicked then
-		local onRoute = {}
-		for _, st in ipairs(stops) do onRoute[st.row] = true end
-		for place = 1, #D.places do
-			local list = byPlace[place]
-			if list and not onRoute[place] then
-				local pl = D.places[place]
-				local pos = contPos(pl[3], pl[4], pl[5])
-				if pos then
-					local sm = placeSum(list)
-					others[#others + 1] = { pos = pos, place = place, n = sm.n > 0 and sm.n or #list, zone = pl[2], open = sm.n > 0, picked = sm.picked > 0,
-						state = sm.state, color = sm.color, value = sm.value, label = sm.label, sum = sm,
-						tip = placeTip(place, pl[1] .. (pl[2] and (', ' .. pl[2]) or '')), pick = function() ui.openPicker(place) end }
-				end
-			end
-		end
-	end
-	local zoneSums, zs = {}, {}
-	for place = 1, #D.places do
-		local list = byPlace[place]
-		if list then
-			local pl = D.places[place]
-			local zn = pl[2] or pl[1]
-			local z = zs[zn]
-			if not z then z = { name = zn, n = 0, cost = 0, net = 0, rep = 0, rows = {}, pts = {}, done = 0, all = 0 }; zs[zn] = z; zoneSums[#zoneSums + 1] = z end
-			local sm = placeSum(list)
-			z.n, z.cost, z.net, z.rep, z.done, z.all = z.n + sm.n, z.cost + sm.cost, z.net + sm.net, z.rep + sm.rep, z.done + sm.done, z.all + #list
-			for _, r in ipairs(sm.open) do z.rows[#z.rows + 1] = r end
-			local pos = contPos(pl[3], pl[4], pl[5])
-			if pos then z.pts[#z.pts + 1] = pos end
-		end
-	end
-	ui.zoneMin = (ui.zoneMinFor == plan) and ui.zoneMin or {}
-	ui.zoneMinFor = plan
-	for _, z in ipairs(zoneSums) do
-		z.per = z.rep > 0 and z.net / z.rep or nil
-		z.color = z.n > 0 and valueColor(valueT(z.per)) or STATE_COLOR.done
-		z.allPicked = function()
-			if #z.rows == 0 then return false end
-			for _, r in ipairs(z.rows) do if not picksOf()[r.writ] then return false end end
-			return true
-		end
-		z.pickAll = function()
-			local set, on = picksOf(), not z.allPicked()
-			for _, r in ipairs(z.rows) do set[r.writ] = on or nil end
-			if ui.doPlan then ui.doPlan() end
-			ui.drawRoute()
-		end
-		z.minutes = function()
-			if ui.zoneMin[z.name] == nil then
-				local _, class = UnitClass('player')
-				local ok, rt = pcall(Plan.Route, { writs = z.rows, start = State.Start(), bags = bagCap(), hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE' })
-				ui.zoneMin[z.name] = (ok and rt and #z.rows > 0) and math.floor(rt.total / 60 + 0.5) or false
-			end
-			return ui.zoneMin[z.name] or nil
-		end
-		z.short = z.n > 0 and ('%d writ%s · %s · +%s'):format(z.n, z.n == 1 and '' or 's', short(z.cost), commas(z.rep)) or (z.done > 0 and 'all handed in today' or 'none on the AH')
-	end
-	table.sort(zoneSums, function(a, b)
-		if (a.n > 0) ~= (b.n > 0) then return a.n > 0 end
-		if a.per and b.per and a.per ~= b.per then return a.per < b.per end
-		return a.name < b.name
-	end)
-	ui.zoneSums = zoneSums
-	do local nextLeg; for i = #steps, 1, -1 do if steps[i].row then nextLeg = steps[i].n end steps[i].li = nextLeg end end
-	local byZone, zoneOrder = {}, {}
-	for _, st in ipairs(stops) do
-		local zn = st.zone or '?'
-		local e = byZone[zn]
-		if not e then e = { name = zn, hand = 0, sec = 0, mail = 0, pts = {} }; byZone[zn] = e; zoneOrder[#zoneOrder + 1] = e end
-		e.hand = e.hand + st.hand
-		if st.kind == 'mail' then e.mail = e.mail + 1 end
-		local leg = route.legs[st.n]
-		e.sec = e.sec + (leg and leg.sec or 0)
-		if st.pos then e.pts[#e.pts + 1] = st.pos end
-	end
-	local rows = {}
-	if #zoneOrder > 1 then
-		rows[#rows + 1] = { head = 'BY ZONE' }
-		for _, e in ipairs(zoneOrder) do
-			local bits = {}
-			if e.hand > 0 then bits[#bits + 1] = e.hand .. ' hand-in' .. (e.hand == 1 and '' or 's') end
-			if e.mail > 0 then bits[#bits + 1] = 'mailbox' end
-			bits[#bits + 1] = math.max(1, math.floor(e.sec / 60 + 0.5)) .. ' min'
-			rows[#rows + 1] = { text = WHITE .. e.name .. '|r' .. MUTED .. ': ' .. table.concat(bits, ', ') .. '|r', zone = e }
-		end
-		rows[#rows + 1] = { head = 'STEPS' }
-	end
-	for _, st in ipairs(steps) do rows[#rows + 1] = { step = st } end
-	local y = 0
-	for i, row in ipairs(rows) do
-		local r = ui.routeRows[i]
-		if not r then
-			r = CreateFrame('Frame', nil, ui.routeList)
-			r.t = S.Text(r, 12); r.t:SetPoint('TOPLEFT', 44, 0); r.t:SetWidth(LW() - 60); r.t:SetWordWrap(true)
-			r.m = S.Text(r, 11, C.muted, 'RIGHT'); r.m:SetPoint('TOPLEFT', 0, 0); r.m:SetWidth(38)
-			r.hl = r:CreateTexture(nil, 'BACKGROUND'); r.hl:SetAllPoints(); r.hl:SetColorTexture(1, 1, 1, 0.06); r.hl:Hide()
-			r:EnableMouse(true)
-			r:SetScript('OnEnter', function(self)
-				if self.li or self.zone then self.hl:Show() end
-				if self.li then hiLeg(self.li, true) end
-				if not self.writs or #self.writs == 0 then return end
-				GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
-				for _, wr in ipairs(self.writs) do GameTooltip:AddLine((wr.n > 1 and (wr.n .. ' x ') or '') .. wr.itemName, 1, 1, 1) end
-				GameTooltip:Show()
-			end)
-			r:SetScript('OnLeave', function(self) self.hl:Hide(); if self.li then hiLeg(self.li, false) end GameTooltip:Hide() end)
-			r:SetScript('OnMouseUp', function(self) if self.go then self.go() end end)
-			ui.routeRows[i] = r
-		end
-		r.writs, r.li, r.zone, r.go = nil, nil, nil, nil
-		r.t:ClearAllPoints()
-		if r.btn then r.btn:Hide() end
-		if row.zsum then
-			local z = row.zsum
-			local mins = z.minutes()
-			r.t:SetPoint('TOPLEFT', 0, 0)
-			r.t:SetText(('%s %s%s|r  %s%s|r%s'):format(swatch(z.color), WHITE, z.name, MUTED, z.short, mins and ('  ~' .. mins .. ' min') or ''))
-			r.m:SetText('')
-			r.zone = z
-			r.go = function() if ui.omMode then return ns.OMRoute.Fit(z.pts) end mapGo(z.pts[1], 4) end
-			if not r.btn then
-				r.btn = S.Button(r, 'Pick all', 58, 18, function(self) if self.z then self.z.pickAll() end end)
-				r.btn:SetPoint('TOPRIGHT', 0, 1)
-			end
-			r.btn.z = z
-			r.btn:SetText(z.allPicked() and 'Unpick' or 'Pick all')
-			r.btn:Show()
-		elseif row.head then
-			r.t:SetPoint('TOPLEFT', 0, i == 1 and 0 or -6); r.t:SetText(GOLD .. row.head .. '|r'); r.m:SetText('')
-		elseif row.zone then
-			r.t:SetPoint('TOPLEFT', 0, 0); r.t:SetText(row.text); r.m:SetText('')
-			r.zone = row.zone
-			r.go = function()
-				local pts = row.zone.pts
-				if #pts == 0 then return end
-				if ui.omMode then return ns.OMRoute.Fit(pts) end
-				if pts[1].c ~= ui.mapCont then ui.mapContPicked = pts[1].c; ui.drawRoute() end
-				local same = {}
-				for _, p in ipairs(pts) do if p.c == pts[1].c then same[#same + 1] = p end end
-				local nv = fitView(same, pts[1].c); nv.key = ui.mapView and ui.mapView.key
-				ui.mapView = nv; mapRender()
-			end
-		else
-			local st = row.step
-			local stop = st.kind == 'stop' or st.kind == 'mail'
-			r.t:SetPoint('TOPLEFT', 44, 0)
-			r.t:SetText((stop and (GOLD .. st.n .. '.|r ') or MUTED) .. st.text .. (stop and '' or '|r'))
-			r.m:SetText(st.at and (math.floor(st.at / 60 + 0.5) .. ' min') or '')
-			r.writs, r.li = st.writs, st.li
-			local target = st.li and stops[st.li]
-			if target and target.pos then r.go = function() mapGo(target.pos, 6) end end
-		end
-		r.t:SetWidth(row.step and (LW() - 60) or row.zsum and (LW() - 80) or (LW() - 16))
-		local hgt = math.max(16, (r.t:GetStringHeight() or 14) + 5) + (row.head and i > 1 and 6 or 0)
-		r:SetSize(LW() - 10, hgt)
-		r:ClearAllPoints(); r:SetPoint('TOPLEFT', 0, -y)
-		r:Show()
-		y = y + hgt
-	end
-	for i = #rows + 1, #ui.routeRows do ui.routeRows[i]:Hide() end
-	ui.routeList:SetHeight(math.max(1, y))
-	if ui.fitStrip then ui.fitStrip(y) end
-	if not route then
-		if #others > 0 then
-			local sp = D.nodes[State.Start()]
-			local spos = sp and contPos(sp[2], sp[3], sp[4])
-			local count = {}
-			for _, o in ipairs(others) do count[o.pos.c] = (count[o.pos.c] or 0) + 1 end
-			local cont = ui.mapContPicked or (((count[1414] or 0) >= (count[1415] or 0)) and 1414 or 1415)
-			ui.mapCont = cont
-			ui.mapData = { cont = cont, stops = {}, legs = {}, others = others, zones = zoneSums, start = { pos = spos, tip = { 'Start' } } }
-			if ui.omMode then ns.OMRoute.SetData(ui.mapData); return end
-			local key = 'others:' .. cont
-			if not ui.mapView or ui.mapView.key ~= key then
-				local pts = {}
-				for _, o in ipairs(others) do if o.pos.c == cont then pts[#pts + 1] = o.pos end end
-				ui.mapView = fitView(pts, cont); ui.mapView.key = key
-			end
-			return mapRender()
-		end
-		ui.mapData = nil
-		if ui.omMode then ns.OMRoute.SetData(nil) else m.none:SetText(''); mapRender() end
-		return
-	end
-	local sn = D.nodes[route.start]
-	local startPos = contPos(sn[2], sn[3], sn[4])
-	local count = {}
-	for _, st in ipairs(stops) do if st.pos then count[st.pos.c] = (count[st.pos.c] or 0) + 1 end end
-	local cont = ui.mapCont
-	if not cont or not count[cont] then cont = ((count[1414] or 0) >= (count[1415] or 0)) and 1414 or 1415 end
-	if ui.mapContPicked then cont = ui.mapContPicked end
-	ui.mapCont = cont
-	ui.contK:SetText((cont == 1414 and GOLD or WHITE) .. 'Kalimdor' .. (count[1414] and (' (' .. count[1414] .. ')') or '') .. '|r')
-	ui.contE:SetText((cont == 1415 and GOLD or WHITE) .. 'Eastern Kingdoms' .. (count[1415] and (' (' .. count[1415] .. ')') or '') .. '|r')
-	local legs = {}
-	local prev = startPos
-	for li, leg in ipairs(route.legs) do
-		local stop = stops[li]
-		local cur = prev
-		local how, segs = {}, {}
-		if leg.port then
-			local nd = D.nodes[leg.port.node]
-			cur = nd and contPos(nd[2], nd[3], nd[4]) or cur
-			how[#how + 1] = (leg.port.kind == 'hearth' and 'Hearth to ' or 'Teleport to ') .. leg.port.name
-		end
-		for _, h in ipairs(leg.hops) do
-			local kind, from, to, map, x, y_ = unpack(D.hops[h])
-			local dep = contPos(map, x, y_) or cur
-			if cur and dep then segs[#segs + 1] = { cur, dep, 'ride' } end
-			local tn = nodeByName[to]
-			local arr = tn and contPos(tn[2], tn[3], tn[4]) or nil
-			if arr and dep then segs[#segs + 1] = { dep, arr, kind == 'fly' and 'fly' or 'boat' } end
-			how[#how + 1] = (kind == 'fly' and 'Flight ' or ((kind == 'zeppelin' and 'Zeppelin ' or 'Boat '))) .. from .. ' to ' .. to
-			cur = arr or dep
-		end
-		if stop and stop.pos and cur then segs[#segs + 1] = { cur, stop.pos, 'ride' } end
-		if #how == 0 then how[1] = 'Ride' end
-		local min = math.max(1, math.floor(leg.sec / 60 + 0.5))
-		legs[li] = { segs = segs, from = prev, to = stop and stop.pos, min = min,
-			tip = { ('%d min to %s'):format(min, stop and (stop.text:match('^[^:]+') or '') or ''), table.concat(how, ', ') .. (leg.fare and leg.fare > 0 and ('. Flights ' .. Plan.Money(leg.fare)) or '') } }
-		prev = stop and stop.pos or prev
-	end
-	ui.mapData = { cont = cont, stops = stops, legs = legs, others = others, zones = zoneSums, start = { pos = startPos, tip = { 'Start: ' .. sn[1] } } }
-	if ui.omMode then ns.OMRoute.SetData(ui.mapData); return end
-	local key = tostring(route) .. ':' .. cont
-	if not ui.mapView or ui.mapView.key ~= key then
-		local pts = {}
-		if startPos and startPos.c == cont then pts[1] = startPos end
-		for _, st in ipairs(stops) do if st.pos and st.pos.c == cont then pts[#pts + 1] = st.pos end end
-		ui.mapView = fitView(pts, cont)
-		ui.mapView.key = key
-	end
-	mapRender()
-end
-
 local function heldRoute()
+	useFlights()
 	local st = State.Read(db)
 	local items = {}
 	for id, k in pairs(st.items) do items[id] = k end
@@ -1062,346 +250,42 @@ local function heldRoute()
 	for _ in pairs(st.from.mail) do inMail = true end
 	for _ in pairs(st.from.bought) do inMail = true end
 	local _, class = UnitClass('player')
-	local route = Plan.Route({ writs = out.writs, start = State.Start(), bags = inMail and bagCap() or 0, hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE', label = withLabel and label or nil })
+	local route = Plan.Route({ writs = out.writs, level = UnitLevel and UnitLevel('player') or nil, start = State.Start(), bags = inMail and bagCap() or 0, hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE', label = withLabel and label or nil })
 	return out, route
 end
 
-local function buildMap()
-	local w = CreateFrame('Frame', PREFIX .. 'Route', UIParent)
-	w:SetSize(MAP_W, 640)
-	w:SetFrameStrata('HIGH')
-	w:SetPoint('TOPLEFT', ui.frame, 'TOPRIGHT', 6, 0)
-	w:SetScale(settings().scale or 1)
-	S.Box(w, C.bg, C.border)
-	local head = CreateFrame('Frame', nil, w)
-	head:SetPoint('TOPLEFT', 1, -1); head:SetPoint('TOPRIGHT', -1, -1); head:SetHeight(30)
-	S.Box(head, C.panel, { 0, 0, 0, 0 })
-	local title = S.Text(head, 14, C.gold); title:SetPoint('LEFT', PAD - 1, 0); title:SetText('Route')
-	local close = S.Button(head, 'x', 24, 22, function() ui_hideRoute() end); close:SetPoint('RIGHT', -4, 0)
-	ui.mapClose = close
-	ui.mapFold = S.Button(head, '<', 24, 22, function() ui.foldRoute(true) end); ui.mapFold:SetPoint('RIGHT', close, 'LEFT', -4, 0)
-	local function tipFor(b, title, text)
-		b:HookScript('OnEnter', function(self) GameTooltip:SetOwner(self, 'ANCHOR_BOTTOM'); GameTooltip:AddLine(title); GameTooltip:AddLine(text, 1, 1, 1, true); GameTooltip:Show() end)
-		b:HookScript('OnLeave', function() GameTooltip:Hide() end)
+local function warnLines(writs, level)
+	local at, out = {}, {}
+	for _, w in ipairs(writs) do at[#at + 1] = w.place end
+	local zs = Plan.Warn(at, level)
+	if #zs == 1 then out[1] = RED .. Plan.WarnText(zs[1][1], zs[1][2], level) .. '|r'
+	elseif #zs > 1 then
+		local names = {}
+		for _, z in ipairs(zs) do names[#names + 1] = ('%s (%d+)'):format(z[1], z[2]) end
+		out[1] = RED .. ('Above your level (%d): %s. You can still do them, but expect to die a few times.|r'):format(level, table.concat(names, ', '))
 	end
-	ui.contE = S.Button(head, 'Eastern Kingdoms', 150, 22, function() ui.mapContPicked = 1415; ui.drawRoute() end)
-	ui.contE:SetPoint('RIGHT', close, 'LEFT', -16, 0)
-	ui.contK = S.Button(head, 'Kalimdor', 110, 22, function() ui.mapContPicked = 1414; ui.drawRoute() end)
-	ui.contK:SetPoint('RIGHT', ui.contE, 'LEFT', -4, 0)
-	ui.mapModeBtn = S.Button(w, 'OpenMap', 80, 22, function()
-		settings().routeMap = ui.omMode and 'here' or 'openmap'
-		ui_applyMapMode()
-		if ui.omMode then ns.OMRoute.Open(true) else ns.OMRoute.SetOn(false) end
-		ui.drawRoute()
-	end)
-	ui.mapModeBtn:HookScript('OnEnter', function(self)
-		GameTooltip:SetOwner(self, 'ANCHOR_BOTTOM')
-		GameTooltip:AddLine('Where the map is')
-		GameTooltip:AddLine(ui.omMode and "On OpenMap's world map (M): the steps here move it. Click for the map in this window instead."
-			or "In this window. Click to put the route on OpenMap's world map instead.", 1, 1, 1, true)
-		GameTooltip:Show()
-	end)
-	ui.mapModeBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
-	ui.mapFitBtn = S.Button(head, 'Fit', 40, 22, function() ns.OMRoute.Open(true) end)
-	ui.mapFitBtn:HookScript('OnEnter', function(self)
-		GameTooltip:SetOwner(self, 'ANCHOR_BOTTOM')
-		GameTooltip:AddLine('The whole route')
-		GameTooltip:AddLine("Opens the world map fitted to the route. Click a step or a zone here to go to it; a group on the map zooms in.", 1, 1, 1, true)
-		GameTooltip:Show()
-	end)
-	ui.mapFitBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
-	local seg = CreateFrame('Frame', nil, w)
-	seg:SetPoint('TOPLEFT', PAD, -40); seg:SetSize(LIST_W - 10, 22)
-	ui.planSeg = seg
-
-	local function choose(which)
-		if which == 'held' then return ui.routeHeld(true) end
-		ui.mapSource = 'plan'
-		mine().planMode = which
-		if ui.doPlan then ui.doPlan() end
-		ui.drawRoute()
-	end
-	ui.segAuto = S.Button(seg, 'Auto plan', 72, 22, function() choose('auto') end); ui.segAuto:SetPoint('LEFT', 0, 0)
-	ui.segMine = S.Button(seg, 'Pick my own', 88, 22, function() choose('picks') end); ui.segMine:SetPoint('LEFT', ui.segAuto, 'RIGHT', -1, 0)
-	ui.segHeld = S.Button(seg, 'Hand in what I have', 128, 22, function() choose('held') end); ui.segHeld:SetPoint('LEFT', ui.segMine, 'RIGHT', -1, 0)
-	tipFor(ui.segAuto, 'Auto plan', 'Planned from your goal (the reputation and days in the panel) and the AH prices: the writs chosen for you, bought, then this route.')
-	tipFor(ui.segMine, 'Pick my own', 'Only the writs you pick on the map, nothing chosen for you: their shopping list, then their route. Clear empties it.')
-	tipFor(ui.segHeld, 'Hand in what I have', 'The writs already in your bags, mail and bank, with their items: their route. Nothing to buy.')
-	ui.modeLine = S.Text(w, 11, C.muted); ui.modeLine:SetPoint('TOPLEFT', PAD, -66); ui.modeLine:SetWidth(LIST_W - 10)
-	local sa = CreateFrame('Button', nil, w)
-	sa:SetPoint('TOPLEFT', PAD, -84); sa:SetSize(LIST_W - 10, 18)
-	sa.box = CreateFrame('Frame', nil, sa); sa.box:SetSize(13, 13); sa.box:SetPoint('LEFT', 2, 0)
-	sa.t = S.Text(sa, 12); sa.t:SetPoint('LEFT', sa.box, 'RIGHT', 7, 0); sa.t:SetText('Show all writs on the map')
-	sa:SetScript('OnClick', function() settings().showOthers = settings().showOthers == false; ui.drawRoute() end)
-	tipFor(sa, 'Show all writs', 'Every writ hand-in on the map, coloured by value and state, to pick from. Off: only the route.')
-	ui.showAll = sa
-	ui.mapSummary = S.Text(w, 12); ui.mapSummary:SetPoint('TOPLEFT', PAD, -110); ui.mapSummary:SetWidth(LIST_W - 10)
-	local pr = CreateFrame('Frame', nil, w)
-	pr:SetPoint('TOPLEFT', ui.mapSummary, 'BOTTOMLEFT', 0, -6); pr:SetSize(LIST_W - 10, 20)
-	ui.pickRow = pr
-	ui.pickTotals = S.Text(pr, 11, C.text); ui.pickTotals:SetPoint('LEFT'); ui.pickTotals:SetWidth(LIST_W - 110)
-	ui.pickClear = S.Button(pr, 'Clear my picks', 96, 20, function() mine().picks = {}; if ui.doPlan then ui.doPlan() end; ui.drawRoute() end)
-	ui.pickClear:SetPoint('RIGHT')
-	tipFor(ui.pickClear, 'Clear my picks', 'Unpicks every writ you picked. (Auto still plans its own writs for your goal.)')
-	local sf = CreateFrame('ScrollFrame', nil, w)
-	sf:SetPoint('TOPLEFT', pr, 'BOTTOMLEFT', 0, -6); sf:SetPoint('BOTTOMLEFT', PAD, 96); sf:SetWidth(LIST_W - 10)
-	local rc = CreateFrame('Frame', nil, sf)
-	rc:SetSize(LIST_W - 10, 400)
-	sf:SetScrollChild(rc)
-	sf:EnableMouseWheel(true)
-	sf:SetScript('OnMouseWheel', function(self, d)
-		local max = math.max(0, rc:GetHeight() - self:GetHeight())
-		self:SetVerticalScroll(math.max(0, math.min(max, self:GetVerticalScroll() - d * 36)))
-	end)
-	ui.routeList, ui.routeRows, ui.mapSF = rc, {}, sf
-	local key = S.Text(w, 11, C.muted); key:SetPoint('BOTTOMLEFT', PAD, 44); key:SetWidth(LIST_W - 10)
-	ui.mapKey = key
-	ui.mapGo = S.Button(w, 'Guide me', 92, 26, function()
-		local route = shownRoute()
-		if not route then return refresh('Plan first', true) end
-		if not ns.Nav then return end
-		local n = ns.Nav.Start(route)
-		refresh(n > 0 and ('Guide started: ' .. n .. ' steps. Follow the waypoint; the small window says what to do') or 'Nothing on this route to guide', n == 0)
-	end, true)
-	ui.mapGo:SetPoint('BOTTOMLEFT', PAD, 10)
-	tipFor(ui.mapGo, 'Guide me', 'This route step by step, with no other addon: a waypoint for each place, a button for each writ, the hand-in done for you, and a star on who takes it.')
-	ui.mapRxp = S.Button(w, 'Send route to RestedXP', 186, 26, function() ui.sendToRXP(shownRoute()) end)
-	ui.mapRxp:SetPoint('LEFT', ui.mapGo, 'RIGHT', 8, 0)
-	tipFor(ui.mapRxp, 'Send route to RestedXP', 'This route as a RestedXP guide (group "Writs and Favors"), opened for you.')
-	ui.mapModeBtn:SetPoint('LEFT', ui.mapRxp, 'RIGHT', 8, 0)
-	key:SetText(WHITE .. '---|r ride   ' .. GOLD .. '- - -|r flight   |cff73bfff. . .|r boat, zeppelin   badge: hand-ins\nWheel: zoom   drag: move   click a step: go to it')
-	local mb = CreateFrame('Frame', nil, w)
-	ui.mapBox = mb
-	mb:SetPoint('TOPLEFT', LIST_W + PAD, -MAP_TOP); mb:SetPoint('BOTTOMRIGHT', -PAD, PAD)
-	S.Box(mb, { 0.03, 0.03, 0.035, 1 }, C.border)
-	local m = CreateFrame('Frame', PREFIX .. 'RouteMap', mb)
-	m:SetPoint('TOPLEFT', 4, -4); m:SetPoint('BOTTOMRIGHT', -4, 4)
-	if m.SetClipsChildren then m:SetClipsChildren(true) end
-	m.art = CreateFrame('Frame', nil, m)
-	m.art:SetPoint('TOPLEFT')
-	m.tiles, m.ztiles, m.lines, m.sqs, m.stops, m.legs, m.clusters, m.zlabels = {}, {}, {}, {}, {}, {}, {}, {}
-	m.none = S.Text(m, 12, C.muted, 'CENTER'); m.none:SetPoint('CENTER')
-	m:EnableMouse(true); m:EnableMouseWheel(true)
-	local function cursor()
-		local x, y = GetCursorPosition()
-		local sc, l, t = m:GetEffectiveScale() or 1, m:GetLeft(), m:GetTop()
-		if not (x and l and t) then return end
-		return x / sc - l, t - y / sc
-	end
-	m:SetScript('OnMouseWheel', function(_, delta) if ui.picker then ui.picker:Hide() end local mx, my = cursor(); zoomAround(delta > 0 and 1.5 or 1 / 1.5, mx, my) end)
-	m:SetScript('OnMouseDown', function(self, btn)
-		if ui.picker then ui.picker:Hide() end
-		if btn ~= 'LeftButton' or not ui.mapView then return end
-		local x, y = GetCursorPosition()
-		if x then self.drag = { x = x, y = y, cx = ui.mapView.cx, cy = ui.mapView.cy, s = self:GetEffectiveScale() or 1, at = 0 } end
-	end)
-	m:SetScript('OnMouseUp', function(self) if self.drag then self.drag = nil; mapRender() end end)
-	m:SetScript('OnHide', function(self) self.drag = nil end)
-	m:SetScript('OnUpdate', function(self)
-		local dr, v = self.drag, ui.mapView
-		if not (dr and v and self.aw) then return end
-		local x, y = GetCursorPosition()
-		v.cx = dr.cx - (x - dr.x) / dr.s / self.aw
-		v.cy = dr.cy + (y - dr.y) / dr.s / self.ah
-		local now = GetTime()
-		if now - dr.at > 0.05 then dr.at = now; mapRender() end
-	end)
-	local zb = CreateFrame('Frame', nil, mb)
-	zb:SetSize(150, 24); zb:SetPoint('TOPRIGHT', -8, -8)
-	zb:SetFrameLevel((m:GetFrameLevel() or 1) + 50)
-	local zfit = S.Button(zb, 'Fit', 40, 22, function() if ui.mapView then ui.mapView.key = nil end ui.drawRoute() end)
-	zfit:SetPoint('RIGHT')
-	local zout = S.Button(zb, '-', 24, 22, function() zoomAround(1 / 1.5) end); zout:SetPoint('RIGHT', zfit, 'LEFT', -4, 0)
-	local zin = S.Button(zb, '+', 24, 22, function() zoomAround(1.5) end); zin:SetPoint('RIGHT', zout, 'LEFT', -4, 0)
-	ui.mapZoomText = S.Text(zb, 11, C.muted, 'RIGHT'); ui.mapZoomText:SetPoint('RIGHT', zin, 'LEFT', -6, 0)
-	for _, b in ipairs({ zfit, zout, zin }) do
-		b:HookScript('OnEnter', function(self)
-			GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
-			GameTooltip:AddLine(self == zfit and 'Back to the whole route' or self == zin and 'Zoom in' or 'Zoom out')
-			GameTooltip:AddLine('Mouse wheel zooms where the cursor is; drag to move. Click a stop or a group to zoom in on it.', 1, 1, 1, true)
-			GameTooltip:Show()
-		end)
-		b:HookScript('OnLeave', function() GameTooltip:Hide() end)
-	end
-	ui.map, ui.mapWin = m, w
-	w:Hide()
+	return out
 end
-local function fillPicker()
-	local pk = ui.picker
-	local list = ui.byPlace and ui.byPlace[pk.place] or {}
-	local pl = D.places[pk.place]
-	pk.title:SetText(pl and (pl[1] .. (pl[2] and (MUTED .. ', ' .. pl[2] .. '|r') or '')) or '')
-	local y = -30
-	for i, r in ipairs(list) do
-		local row = pk.rows[i]
-		if not row then
-			row = CreateFrame('Button', nil, pk)
-			row:SetHeight(20)
-			row.hl = row:CreateTexture(nil, 'BACKGROUND'); row.hl:SetAllPoints(); row.hl:SetColorTexture(1, 1, 1, 0.07); row.hl:Hide()
-			row.box = CreateFrame('Frame', nil, row); row.box:SetSize(12, 12); row.box:SetPoint('LEFT', 2, 0)
-			row.t = S.Text(row, 12); row.t:SetPoint('LEFT', 20, 0); row.t:SetPoint('RIGHT', -2, 0)
-			row:SetScript('OnEnter', function(self) if self.can then self.hl:Show() end end)
-			row:SetScript('OnLeave', function(self) self.hl:Hide() end)
-			row:SetScript('OnClick', function(self)
-				if not self.can then return end
-				local set = picksOf()
-				set[self.writ] = not set[self.writ] or nil
-				if ui.doPlan then ui.doPlan() end
-				ui.drawRoute()
-				fillPicker()
-			end)
-			pk.rows[i] = row
-		end
-		local state = candState(r)
-		row.writ, row.can = r.writ, state ~= 'done' and state ~= 'none'
-		local on = state == 'picked'
-		S.Box(row.box, on and C.green or (state == 'planned' and C.gold) or { 0.1, 0.1, 0.1, 1 }, row.can and C.border or { 0.15, 0.15, 0.15, 1 })
-		row.t:SetText(candLine(r))
-		row.t:SetAlpha(row.can and 1 or 0.55)
-		row:ClearAllPoints(); row:SetPoint('TOPLEFT', 8, y); row:SetPoint('TOPRIGHT', -8, y)
-		row:Show()
-		y = y - 21
-	end
-	for i = #list + 1, #pk.rows do pk.rows[i]:Hide() end
-	pk.foot:SetText((pickTotals() or (MUTED .. 'Nothing picked yet|r')) .. '\n' .. MUTED .. (mine().planMode == 'picks' and 'My picks: only these are planned' or 'Auto plan: picks are planned first, the rest round them') .. '|r')
-	pk:SetHeight(-y + 44)
-end
-ui_openPicker = function(place)
-	if not (ui.byPlace and ui.byPlace[place]) then return end
-	local pk = ui.picker
-	if not pk then
-		pk = CreateFrame('Frame', PREFIX .. 'Picker', UIParent)
-		pk:SetSize(400, 120)
-		pk:SetFrameStrata('TOOLTIP')
-		pk:SetClampedToScreen(true)
-		pk:EnableMouse(true)
-		S.Box(pk, C.bg, C.border)
-		pk.title = S.Text(pk, 13, C.gold); pk.title:SetPoint('TOPLEFT', 10, -9); pk.title:SetPoint('TOPRIGHT', -34, -9)
-		local x = S.Button(pk, 'x', 22, 20, function() pk:Hide() end); x:SetPoint('TOPRIGHT', -4, -4)
-		pk.foot = S.Text(pk, 11, C.text); pk.foot:SetPoint('BOTTOMLEFT', 10, 8); pk.foot:SetPoint('BOTTOMRIGHT', -10, 8)
-		pk.rows = {}
-		ui.picker = pk
-		if UISpecialFrames then table.insert(UISpecialFrames, pk:GetName()) end
-	end
-	pk.place = place
-	fillPicker()
-	local cx, cy = GetCursorPosition()
-	local sc = UIParent:GetEffectiveScale() or 1
-	pk:ClearAllPoints()
-	if cx then pk:SetPoint('TOPLEFT', UIParent, 'BOTTOMLEFT', cx / sc + 14, cy / sc - 6) else pk:SetPoint('CENTER') end
-	pk:Show()
-	if ui.omMode and ns.OMRoute then ns.OMRoute.WatchView(function() if ui.picker then ui.picker:Hide() end end) end
-end
-
-local function mapUp() return WorldMapFrame and WorldMapFrame:IsShown() end
-local function placeStrip()
-	local w = ui.mapWin
-	if not (w and ui.omMode) then return end
-	local sc = WorldMapFrame and WorldMapFrame.ScrollContainer
-	w:ClearAllPoints()
-	if sc and mapUp() then w:SetPoint('TOPLEFT', sc, 'TOPLEFT', 10, -10)
-	else w:SetPoint('TOPLEFT', ui.frame, 'TOPRIGHT', 6, 0) end
-	if ui.routeTab then
-		ui.routeTab:ClearAllPoints()
-		if sc then ui.routeTab:SetPoint('BOTTOMLEFT', sc, 'BOTTOMLEFT', 10, 10) end
-	end
-end
-local function fitStrip(listH)
-	local w = ui.mapWin
-	if not (w and ui.omMode) then return end
-	local h = 110 + (ui.mapSummary:GetStringHeight() or 14) + 6 + 20 + 6 + (listH or 0) + 100
-	local most = 640
-	local sc = WorldMapFrame and WorldMapFrame.ScrollContainer
-	if sc and mapUp() and sc:GetHeight() and w:GetEffectiveScale() and w:GetEffectiveScale() > 0 then
-		most = sc:GetHeight() * sc:GetEffectiveScale() / w:GetEffectiveScale() - 20
-	end
-	w:SetHeight(math.max(240, math.min(most, h)))
-end
-local function fold(on)
-	settings().routeFolded = on and true or nil
-	if not ui.routeTab then
-		local t = S.Button(UIParent, 'Route  >', 72, 24, function() fold(false) end)
-		t:SetFrameStrata('FULLSCREEN_DIALOG')
-		ui.routeTab = t
-	end
-	placeStrip()
-	ui.routeTab:SetShown(on and mapUp() and ns.OMRoute.IsOn() or false)
-	if on then ui.mapWin:Hide() elseif ns.OMRoute.IsOn() then ui.mapWin:Show(); ui.drawRoute() end
-end
-local mapHooked
-local function hookMap()
-	if mapHooked or not WorldMapFrame then return end
-	mapHooked = true
-	WorldMapFrame:HookScript('OnShow', function()
-		if not (ui and ui.omMode and ns.OMRoute and ns.OMRoute.IsOn()) then return end
-		if ui.frame:IsShown() and not InCombatLockdown() then ui.hidForMap = true; ui.frame:Hide() end
-		placeStrip()
-		if settings().routeFolded then fold(true) else ui.mapWin:Show(); ui.drawRoute() end
-	end)
-	WorldMapFrame:HookScript('OnHide', function()
-		if not ui then return end
-		if ui.routeTab then ui.routeTab:Hide() end
-		if ui.omMode and ui.mapWin then ui.mapWin:Hide() end
-		if ui.hidForMap then
-			if InCombatLockdown() then ui.showAfterCombat = true
-			else ui.hidForMap = nil; ui.frame:Show(); refresh() end
-		end
-	end)
-end
-
-ui_applyMapMode = function()
-	if not ui.mapWin then return end
-	ui.omMode = omMode()
-	local om = ui.omMode
-	local lw = LW() - 10
-	ui.mapWin:SetWidth(om and OM_W or MAP_W)
-	ui.fitStrip, ui.foldRoute = fitStrip, fold
-	if om then hookMap(); placeStrip() else ui.mapWin:ClearAllPoints(); ui.mapWin:SetPoint('TOPLEFT', ui.frame, 'TOPRIGHT', 6, 0) end
-	ui.mapFold:SetShown(om)
-	ui.planSeg:SetWidth(lw); ui.showAll:SetWidth(lw); ui.pickTotals:SetWidth(lw - 100); ui.modeLine:SetWidth(lw)
-	ui.mapKey:ClearAllPoints(); ui.mapKey:SetPoint('BOTTOMLEFT', PAD, 44)
-	ui.mapSF:SetPoint('BOTTOMLEFT', PAD, om and 96 or 76)
-	ui.mapWin:SetFrameStrata(om and 'FULLSCREEN_DIALOG' or 'HIGH')
-	ui.mapSummary:SetWidth(lw); ui.mapSF:SetWidth(lw); ui.routeList:SetWidth(lw); ui.mapKey:SetWidth(lw)
-	ui.pickRow:SetWidth(lw); ui.pickTotals:SetWidth(lw)
-	ui.mapBox:SetShown(not om)
-	ui.contK:SetShown(not om); ui.contE:SetShown(not om)
-	local avail = not FAVOR_ONLY and ns.OMRoute and ns.OMRoute.Available()
-	ui.mapModeBtn:SetShown(avail and true or false)
-	ui.mapModeBtn:SetText(om and 'Map: OpenMap' or 'Map: here')
-	ui.mapModeBtn:SetWidth(om and 96 or 80)
-	ui.mapFitBtn:SetShown(om)
-	ui.mapFitBtn:ClearAllPoints(); ui.mapFitBtn:SetPoint('RIGHT', ui.mapFold, 'LEFT', -6, 0)
-	local legend = WHITE .. '---|r ride   ' .. GOLD .. '- - -|r flight   |cff73bfff. . .|r boat, zeppelin   badge: hand-ins\n'
-	if om then
-		legend = legend .. 'Writs: ' .. swatch(valueColor(0)) .. ' cheap ' .. swatch(valueColor(0.5)) .. ' ' .. swatch(valueColor(1)) .. ' dear a rep   '
-			.. swatch(STATE_COLOR.picked) .. ' picked   ' .. swatch(STATE_COLOR.thin) .. ' thin stock\n'
-			.. swatch(STATE_COLOR.done) .. ' handed in today   ' .. swatch(STATE_COLOR.none) .. ' not on the AH   numbered: on the route\n'
-	end
-	ui.mapKey:SetText(legend .. (om and 'Click a writ to pick it; a zone: zoom in, Shift: pick it all.' or 'Wheel: zoom   drag: move   click a step: go to it'))
-	local fh = 40 + 30 + 90 + 50 + 50
-	ui.fitBase = fh
-end
-local function showRoute(src)
-	if not ui.mapWin then buildMap() end
-	if src then ui.mapSource = src end
-	ui.mapWin:SetScale(settings().scale or 1)
-	ui_applyMapMode()
-	ui.mapWin:Show()
-	ui.drawRoute()
-	if ui.omMode then ns.OMRoute.Open(true) end
-end
-ui_hideRoute = function()
-	if ui.mapWin then ui.mapWin:Hide() end
-	if ui.picker then ui.picker:Hide() end
-	if ns.OMRoute then ns.OMRoute.SetOn(false) end
-end
-local function routeHeld(show)
+local function routeHeld()
 	local info, route = heldRoute()
 	ui.heldInfo, ui.heldRoute = info, route
-	if route then refresh(('%d writs held: this route, %d min, +%s rep%s'):format(#info.writs, math.floor(route.total / 60 + 0.5), commas(info.rep), #info.needItem > 0 and ('. ' .. #info.needItem .. ' need their item') or ''))
-	else refresh('Nothing held to hand in now' .. (#info.needItem > 0 and (': ' .. #info.needItem .. ' writs need their item') or ''), true) end
-	if show ~= false then showRoute('held') end
+	local need = #info.needItem > 0 and (#info.needItem .. (#info.needItem == 1 and ' more writ needs its item' or ' more writs need their item')) or nil
+	if not route then
+		ui.mapSource = 'plan'
+		return refresh('Nothing held to hand in now' .. (need and (': ' .. need) or ''), true)
+	end
+	ui.mapSource = 'held'
+	clearBuy()
+	ui.buyHead = 'BUY LIST  ' .. WHITE .. 'nothing to buy|r'
+	local min = math.floor(route.total / 60 + 0.5)
+	local lines = {
+		WHITE .. table.concat({ nb(#info.writs .. (#info.writs == 1 and ' writ held' or ' writs held')), nb('+' .. commas(info.rep) .. ' rep'), nb(min .. ' min') }, DOT) .. '|r',
+		GREEN .. 'Nothing to buy. Guide me or Send to RestedXP takes you round them.|r',
+	}
+	if need then lines[#lines + 1] = GOLD .. need .. ': left out.|r' end
+	for _, l in ipairs(warnLines(info.writs, UnitLevel and UnitLevel('player') or 0)) do lines[#lines + 1] = l end
+	ui.summary:SetText(table.concat(lines, '\n'))
+	refresh(('%d writs held: this route, %d min, +%s rep'):format(#info.writs, min, commas(info.rep)))
 end
 
 local function ago(t)
@@ -1432,11 +316,15 @@ ui_drawHeld = function()
 	local kw, ki = count(st.from.bank)
 	local gw, gi = count(st.from.bought)
 	local tw, ti = bw + mw + kw + gw, bi + mi + ki + gi
-	local parts = { ('Held: %d %s, %d %s'):format(tw, A, ti, B) }
-	if not st.seen.mail then parts[#parts + 1] = 'open your mailbox once to count it' end
-	if not st.seen.bank then parts[#parts + 1] = 'open your bank once to count it' end
-	if kw + ki > 0 then parts[#parts + 1] = 'take the bank ones out before you go' end
-	ui.held.text:SetText(table.concat(parts, '. '))
+	local function some(n, word) return n .. ' ' .. (n == 1 and word:gsub('s$', '') or word) end
+	local parts = {}
+	if tw + ti > 0 then parts[1] = ('You hold %s and %s: left off the list.'):format(some(tw, A), some(ti, B)) end
+	if kw + ki > 0 then parts[#parts + 1] = ('%d in your bank: take %s out first.'):format(kw + ki, kw + ki == 1 and 'it' or 'them') end
+	local unseen = (not st.seen.mail and not st.seen.bank) and 'mailbox and bank' or not st.seen.mail and 'mailbox' or not st.seen.bank and 'bank' or nil
+	if unseen then parts[#parts + 1] = ('Open your %s once to count what\'s there.'):format(unseen) end
+	ui.held.text:SetText(table.concat(parts, ' '))
+	local hh = ui.held.text:GetStringHeight()
+	ui.held:SetHeight(#parts == 0 and 1 or (hh and hh > 10) and hh or 16)
 	ui.held.lines = {
 		{ 'In your bags', ('%d %s, %d %s (now)'):format(bw, A, bi, B) },
 		{ 'In your mail', st.seen.mail and ('%d %s, %d %s (%s)'):format(mw, A, mi, B, ago(st.seen.mail)) or 'not seen yet: open your mailbox' },
@@ -1445,8 +333,14 @@ ui_drawHeld = function()
 	if gw + gi > 0 then ui.held.lines[#ui.held.lines + 1] = { 'Bought, in the mail', ('%d %s, %d %s (not collected yet)'):format(gw, A, gi, B) } end
 end
 
+local function inFight(quiet)
+	if not (InCombatLockdown and InCombatLockdown()) then return false end
+	if not quiet then print('|cffffc840Writs and Favors|r: not in combat. Try again once the fight is over.') end
+	return true
+end
 local function dock()
 	local f = ui.frame
+	if inFight(true) then return end
 	f:SetScale(settings().scale or 1)
 	if settings().pos then
 		local p = settings().pos
@@ -1457,10 +351,10 @@ local function dock()
 end
 local function setScale(v)
 	settings().scale = math.max(0.7, math.min(1.6, math.floor(v * 20 + 0.5) / 20))
-	if ui then ui.frame:SetScale(settings().scale) end
+	if ui and not inFight(true) then ui.frame:SetScale(settings().scale) end
 end
 
-local ui_fillButton, trackFor, trackLine
+local ui_fillButton, ui_stampButton, trackFor, trackLine
 local function build()
 	local f = CreateFrame('Frame', PREFIX .. 'Frame', UIParent)
 	f:SetSize(W, 600)
@@ -1469,7 +363,7 @@ local function build()
 	f:EnableMouse(true)
 	f:SetClampedToScreen(true)
 	f:RegisterForDrag('LeftButton')
-	f:SetScript('OnDragStart', f.StartMoving)
+	f:SetScript('OnDragStart', function(self) if not inFight(true) then self:StartMoving() end end)
 	f:SetScript('OnDragStop', function(self)
 		self:StopMovingOrSizing()
 		local p, _, rp, x, y = self:GetPoint()
@@ -1480,6 +374,7 @@ local function build()
 	ui = { frame = f, rows = {} }
 	local token = 0
 	function ui.changed()
+		ui.mapSource = 'plan'
 		token = token + 1
 		local mine = token
 		C_Timer.After(0.4, function() if mine == token and plan and not Scan.Busy() and ui.doPlan then ui.doPlan() end end)
@@ -1498,25 +393,35 @@ local function build()
 	end
 	local title = S.Text(head, 14, C.gold); title:SetPoint('LEFT', titleX, 0); title:SetText(FAVOR_ONLY and "Merchant's Favor" or 'Writs and Favors')
 	ui.title = title
-	local close = S.Button(head, 'x', 24, 22, function() f:Hide() end); close:SetPoint('RIGHT', -4, 0)
-	local bigger = S.Button(head, 'A+', 30, 22, function() setScale(settings().scale + 0.05) end); bigger:SetPoint('RIGHT', close, 'LEFT', -4, 0)
-	local smaller = S.Button(head, 'A-', 30, 22, function() setScale(settings().scale - 0.05) end); smaller:SetPoint('RIGHT', bigger, 'LEFT', -4, 0)
-	ui.routeBtn = S.Button(head, 'Route', 48, 22, function()
-		if ui.mapWin and ui.mapWin:IsShown() then ui_hideRoute() else ui.showRoute() end
-	end)
-	ui.routeBtn:SetPoint('RIGHT', smaller, 'LEFT', -8, 0)
+	local close = S.Button(head, 'x', 24, 22, function() if not inFight() then f:Hide() end end); close:SetPoint('RIGHT', -4, 0)
+	ui.head = head
+	ui.browseBtn = S.Button(head, 'Browse', 58, 22, function() if ns.Browse then ns.Browse() end end)
+	ui.browseBtn:SetPoint('RIGHT', close, 'LEFT', -8, 0)
 	function ui.switchMode(mode)
 		mode = mode or ((mine().mode == 'favor') and 'writs' or 'favor')
+		if not FAVOR_ONLY then
+			local s = settings()
+			if mode == 'favor' and s.goal ~= 0 then s.lastGoal = s.goal; s.goal = 0
+			elseif mode ~= 'favor' and s.goal == 0 then s.goal = s.lastGoal or 2 end
+		end
 		mine().mode = mode
 		plan = nil
 		ui.track = nil
 		clearBuy()
 		ui.summary:SetText('')
-		refresh(mine().mode == 'favor' and "Merchant's Favor: Scan for live crate prices, then Plan" or 'Craftsman\'s Writs')
+		refresh(mine().mode == 'favor' and "Merchant's Favor: Scan crates for live prices" or 'Craftsman\'s Writs')
 		if ui.doPlan then ui.doPlan() end
 	end
-	ui.modeBtn = S.Button(head, 'Favor', 48, 22, function() ui.switchMode() end)
-	ui.modeBtn:SetPoint('RIGHT', ui.routeBtn, 'LEFT', -4, 0)
+	ui.modeBtn = S.Button(head, 'Favor', 52, 22, function() ui.switchMode() end, true)
+	ui.modeBtn:SetPoint('RIGHT', ui.browseBtn, 'LEFT', -4, 0)
+	ui.modeBtn:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+		local favor = mine().mode == 'favor'
+		GameTooltip:AddLine(favor and 'Switch to Reputation' or "Switch to Merchant's Favor")
+		GameTooltip:AddLine(favor and 'Reputation with ' .. (D.factionName or 'the faction') .. ": Craftsman's Writs and Forged Delivery Receipt crates, planned to the standing you want." or 'Waylaid Crates: the cheapest to fill for the Favor you want.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	ui.modeBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
 	ui.optsBtn = S.Button(head, '', 24, 22, function() ui.opts:SetShown(not ui.opts:IsShown()) end)
 	do
 		local cog = ui.optsBtn:CreateTexture(nil, 'ARTWORK')
@@ -1526,13 +431,16 @@ local function build()
 		ui.optsBtn:HookScript('OnEnter', function(self)
 			GameTooltip:SetOwner(self, 'ANCHOR_TOP')
 			GameTooltip:AddLine('Options')
-			GameTooltip:AddLine('Buy for today or every day, thinly listed writs, your free bag slots, and what it found about your character.', 1, 1, 1, true)
+			GameTooltip:AddLine('Skipping writs with few listings, the size of the panel, and the way to all the settings.', 1, 1, 1, true)
 			GameTooltip:Show()
 		end)
 		ui.optsBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
 	end
-	ui.optsBtn:SetPoint('RIGHT', ui.modeBtn, 'LEFT', -4, 0)
-	f:SetScript('OnHide', function() if ui.mapWin and not (ui.omMode and WorldMapFrame and WorldMapFrame:IsShown()) then ui.mapWin:Hide() end end)
+	ui.optsBtn:SetPoint('RIGHT', ui.browseBtn, 'LEFT', -4, 0)
+	f:SetScript('OnHide', function()
+		if ns.Recipes and ns.Recipes.Shown() then ns.Recipes.Toggle(false) end
+		if ns.Tour then ns.Tour.Closed() end
+	end)
 
 	ui.faction = S.Text(f, 13); ui.faction:SetPoint('TOPLEFT', PAD, -44)
 	ui.standing = S.Text(f, 12, C.muted, 'RIGHT'); ui.standing:SetPoint('TOPRIGHT', -PAD, -45)
@@ -1541,16 +449,65 @@ local function build()
 	ui.goalHead = S.Heading(f, 'Goal', IW)
 	ui.goalHead:SetPoint('TOPLEFT', PAD, -84)
 	local goals = function()
-		local o = {}
-		if mine().mode == 'favor' then
-			for i, n in ipairs(FAVOR_GOALS) do o[i] = { text = '+' .. n .. ' Favor', value = n } end
-		else
-			for i, g in ipairs(State.GOALS) do o[i] = { text = g[1], value = i } end
-		end
+		local o = { { text = 'No reputation', value = 0 } }
+		for i, g in ipairs(State.GOALS) do o[#o + 1] = { text = g[1], value = i } end
 		return o
 	end
-	ui.goal = dropdown(f, 112, goals, function() return mine().mode == 'favor' and settings().favorGoal or settings().goal end,
-		function(v) if mine().mode == 'favor' then settings().favorGoal = v else settings().goal = v end end)
+	ui.goal = dropdown(f, 112, goals, function() return settings().goal end, function(v)
+		settings().goal = v
+		local m = v == 0 and 'favor' or 'writs'
+		if mine().mode ~= m then ui.switchMode(m) end
+	end)
+	ui.favorLabel = S.Text(f, 12, C.muted); ui.favorLabel:SetText('Favor')
+	ui.favorHint = S.Text(f, 12, C.muted)
+	do
+		local eb = CreateFrame('EditBox', PREFIX .. 'FavorWant', f)
+		eb:SetSize(64, 24)
+		S.Box(eb, C.panel, C.border)
+		if not eb:SetFont(S.Font(), 12, '') then eb:SetFont(STANDARD_TEXT_FONT, 12, '') end
+		eb:SetTextColor(C.text[1], C.text[2], C.text[3])
+		eb:SetAutoFocus(false); eb:SetNumeric(true); eb:SetMaxLetters(5); eb:SetTextInsets(8, 8, 0, 0)
+		local function apply()
+			local v = math.max(0, math.min(99999, math.floor(tonumber(eb:GetText() or '') or 0)))
+			if v == (settings().favorWant or 0) then return end
+			settings().favorWant = v
+			refresh()
+			if plan and ui.changed then ui.changed() elseif ui.doPlan and not Scan.Busy() then ui.doPlan() end
+		end
+		eb.apply = apply
+		function ui.setFavorWant(v)
+			v = math.max(0, math.min(99999, math.floor(tonumber(v) or 0)))
+			if v == (settings().favorWant or 0) then return end
+			settings().favorWant = v
+			refresh()
+			if plan and ui.changed then ui.changed() elseif ui.doPlan and not Scan.Busy() then ui.doPlan() end
+		end
+		eb:SetScript('OnEnterPressed', function(self) self:ClearFocus() end)
+		eb:SetScript('OnEscapePressed', function(self) self:SetText(tostring(settings().favorWant or 0)); self:ClearFocus() end)
+		eb:SetScript('OnEditFocusLost', apply)
+		eb.update = function()
+			if not (eb.HasFocus and eb:HasFocus()) then eb:SetText(tostring(settings().favorWant or (FAVOR_ONLY and ((State.Favor(db) or 0) + (settings().favorGoal or 100))) or 0)) end
+			local held = State.Favor(db) or 0
+			local want = settings().favorWant or 0
+			ui.favorHint:SetText(want <= 0 and ('you have ' .. commas(held)) or want <= held and (GREEN .. 'you have ' .. commas(held) .. '|r') or ('have ' .. commas(held) .. ', ' .. commas(want - held) .. ' to get'))
+		end
+		eb:SetScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+			GameTooltip:AddLine("Merchant's Favor to have at the end")
+			GameTooltip:AddLine('How much Favor you want to hold once the plan is done, on top of what the plan itself spends on Forged Delivery Receipts. 0: none wanted. The plan fills Waylaid Crates for what you are short of.', 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		eb:SetScript('OnLeave', function() GameTooltip:Hide() end)
+		ui.favorBox = eb
+	end
+	ui.recipesBtn = S.Button(f, 'Recipes', 72, 24, function() if ns.Recipes then ns.Recipes.Toggle() end end)
+	ui.recipesBtn:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+		GameTooltip:AddLine('Recipes for Favor')
+		GameTooltip:AddLine("The recipes sold for Merchant's Favor, for your professions, less the ones you know. Tick the ones you want and the Favor box becomes what they cost.", 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	ui.recipesBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
 	ui.goal:SetPoint('TOPLEFT', PAD, -104)
 	local dayOpts = function()
 		local o = {}
@@ -1571,7 +528,7 @@ local function build()
 		b:HookScript('OnLeave', function() GameTooltip:Hide() end)
 	end
 	tipOn(ui.goal, 'What to reach', function()
-		return mine().mode == 'favor' and "How much Merchant's Favor to buy crates for." or 'The standing with ' .. (D.factionName or 'Durotar Supply and Logistics') .. ' you want to reach.'
+		return 'The standing with ' .. (D.factionName or 'Durotar Supply and Logistics') .. ' you want to reach. No reputation: the plan is only for the Favor number below.'
 	end)
 	tipOn(ui.days, 'By when', function()
 		return 'When you want to be there. Today: every writ it takes is bought and handed in today. Tomorrow or later: spread over those days. A writ can be handed in once a day, so more days means fewer and cheaper writs each day.'
@@ -1592,7 +549,6 @@ local function build()
 	local lo = S.Text(f, 12, C.text); lo:SetPoint('TOPLEFT', PAD, -178); lo:SetText('Cheaper')
 	local hi = S.Text(f, 12, C.text, 'RIGHT'); hi:SetPoint('TOPRIGHT', -PAD, -178); hi:SetText('Quicker')
 	ui.timeBits = { s, lo, hi }
-	ui.slider = s
 	s:SetScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
 		GameTooltip:AddLine('Cheaper or quicker')
@@ -1604,6 +560,7 @@ local function build()
 	local bw = math.floor((IW - 24) / 4)
 	ui.scan = S.Button(f, 'Scan', bw, 28, function()
 		if mine().mode == 'favor' then return ui.favorScan() end
+		ui.mapSource = 'plan'
 		local quick = Scan.Quick(db) and not IsShiftKeyDown()
 		ui.track = nil
 		Scan.Start(db, function(d, t, what) refresh(('Scanning %d/%d%s'):format(d, t, what and (': ' .. what) or '...')) end,
@@ -1612,31 +569,92 @@ local function build()
 				if failed then return end
 				ui.doPlan()
 				ui.writsStage2(1, { started = GetServerTime and GetServerTime() or time(), full = 0 })
-			end, { quick = quick and mine().mode ~= 'favor', favor = mine().mode == 'favor' })
+			end, { quick = quick and mine().mode ~= 'favor', favor = mine().mode == 'favor', receipts = (settings().receipts or 0) > 0 or (settings().favorWant or 0) > 0 or labelNeedsCrate(State.Label()) })
 	end)
 	ui.scan:SetPoint('TOPLEFT', PAD, -200)
 	ui.plan = S.Button(f, 'Plan', bw, 28, function() ui.doPlan() end)
 	ui.plan:SetPoint('TOPLEFT', PAD + bw + 8, -200)
-	ui.held2 = S.Button(f, 'Route held', bw, 28, function() ui.routeHeld() end)
-	ui.held2:SetPoint('TOPLEFT', PAD + (bw + 8) * 2, -200)
-	ui.rxp = S.Button(f, 'To RestedXP', bw, 28, function() ui.sendToRXP() end)
+	ui.guide = S.Button(f, 'Guide me', bw, 28, function()
+		local route = shownRoute()
+		if not route then return refresh('Scan first: there is no plan yet', true) end
+		if not ns.Nav then return end
+		local n = ns.Nav.Start(route)
+		refresh(n > 0 and ('Guide started: ' .. n .. ' steps. Follow the waypoint; the small window says what to do') or 'Nothing on this route to guide', n == 0)
+	end, true)
+	ui.guide:SetPoint('TOPLEFT', PAD + (bw + 8) * 2, -200)
+	ui.rxp = S.Button(f, 'Send to RestedXP', bw, 28, function() ui.sendToRXP(shownRoute()) end)
 	ui.rxp:SetPoint('TOPLEFT', PAD + (bw + 8) * 3, -200)
+	for b, tip in pairs({
+		[ui.guide] = { 'Guide me', 'Takes you round the hand-ins step by step, with no other addon: a waypoint for each place, a button for each writ, the hand-in done for you. Buy first.' },
+		[ui.rxp] = { 'Send to RestedXP', 'The same route as a RestedXP guide (group "Writs and Favors"), opened for you. Needs RestedXP Guides.' },
+	}) do
+		b:HookScript('OnEnter', function(self)
+			GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+			GameTooltip:AddLine(tip[1])
+			GameTooltip:AddLine(tip[2], 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		b:HookScript('OnLeave', function() GameTooltip:Hide() end)
+	end
 	ui.fill = ui_fillButton(f, bw)
+	ui.stamp = ui_stampButton(f, bw)
+	ui.stamp:SetPoint('TOPLEFT', PAD + bw + 8, -200)
 	ui.fill:SetPoint('TOPLEFT', PAD + (bw + 8) * 2, -200)
 	ui.auto = S.Button(f, 'Auto hand-in', bw, 28, function()
 		settings().autoHandIn = not (settings().autoHandIn ~= false)
 		refresh(settings().autoHandIn ~= false and 'Auto hand-in on: talk to ' .. NPC .. ' and the Sealed crates go in (Shift to skip)' or 'Auto hand-in off')
 	end)
 	ui.auto:SetPoint('TOPLEFT', PAD + (bw + 8) * 3, -200)
-	ui.way = S.Button(f, 'Waypoint: ' .. NPC, bw, 28, function() ui.waypoint() end)
+	ui.way = S.Button(f, 'Waypoint', bw, 28, function() ui.waypoint() end)
+	ui.way:SetPoint('TOPLEFT', PAD, -200)
+	ui.way:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+		GameTooltip:AddLine('Waypoint: ' .. NPC)
+		GameTooltip:AddLine('Puts a waypoint on ' .. NPC_AT .. ', where the crates are handed in.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	ui.way:HookScript('OnLeave', function() GameTooltip:Hide() end)
 
 	ui.todayHead = S.Heading(f, 'Today', IW)
 	ui.todayHead:SetPoint('TOPLEFT', PAD, -242)
+	function ui.choosePlan(which)
+		if which == 'held' then return ui.routeHeld(true) end
+		ui.mapSource = 'plan'
+		if ui.doPlan then ui.doPlan() else refresh() end
+	end
+	do
+		local row = CreateFrame('Frame', nil, f)
+		row:SetSize(178, 22)
+		row:SetPoint('RIGHT', f, 'RIGHT', -PAD, 0); row:SetPoint('TOP', ui.todayHead, 'TOP', 0, 6)
+		local function seg(text, which, w, x, tip)
+			local b = S.Button(row, text, w, 22, function() ui.choosePlan(which) end)
+			b:SetPoint('LEFT', x, 0)
+			b:HookScript('OnEnter', function(self)
+				GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+				GameTooltip:AddLine(text)
+				GameTooltip:AddLine(tip, 1, 1, 1, true)
+				GameTooltip:Show()
+			end)
+			b:HookScript('OnLeave', function() GameTooltip:Hide() end)
+			return b
+		end
+		ui.pAuto = seg('Auto plan', 'auto', 80, 0, 'What to buy for the standing you picked, by the day you picked. Guide me and Send to RestedXP take you round it.')
+		ui.pHeld = seg('What I have', 'held', 98, 79, 'The writs already in your bags, mail and bank: Guide me and Send to RestedXP take you round those instead. Nothing to buy.')
+		ui.planRow = row
+		function ui.colourPlanRow()
+			local heldMode = ui.mapSource == 'held'
+			local edge = { C.gold[1] * 0.7, C.gold[2] * 0.7, C.gold[3] * 0.7, 1 }
+			for b, on in pairs({ [ui.pAuto] = not heldMode, [ui.pHeld] = heldMode }) do
+				b:SetText((on and GOLD or WHITE) .. (b == ui.pAuto and 'Auto plan' or 'What I have') .. '|r')
+				S.Box(b, on and C.hover or C.panel, on and edge or C.border)
+			end
+		end
+	end
 	local alert = CreateFrame('Frame', nil, f)
-	alert:SetPoint('TOPLEFT', ui.todayHead, 'BOTTOMLEFT', 0, -10); alert:SetSize(IW, 36)
+	alert:SetPoint('TOPLEFT', ui.todayHead, 'BOTTOMLEFT', 0, -14); alert:SetSize(IW, 48)
 	S.Box(alert, { 0.25, 0.19, 0.06, 0.55 }, { C.gold[1] * 0.6, C.gold[2] * 0.6, C.gold[3] * 0.6, 1 })
-	alert.icon = alert:CreateTexture(nil, 'ARTWORK'); alert.icon:SetSize(22, 22); alert.icon:SetPoint('LEFT', 7, 0); alert.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-	alert.text = S.Text(alert, 12, C.gold); alert.text:SetPoint('LEFT', 36, 0); alert.text:SetWidth(IW - 42)
+	alert.icon = alert:CreateTexture(nil, 'ARTWORK'); alert.icon:SetSize(22, 22); alert.icon:SetPoint('LEFT', 10, 0); alert.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	alert.text = S.Text(alert, 12, C.gold); alert.text:SetPoint('LEFT', 42, 0); alert.text:SetWidth(IW - 54); alert.text:SetWordWrap(true); alert.text:SetSpacing(2)
 	alert:EnableMouse(true)
 	alert:SetScript('OnEnter', function(self)
 		if not self.item then return end
@@ -1661,12 +679,13 @@ local function build()
 	local held = CreateFrame('Frame', nil, f)
 	ui.trackText = S.Text(f, 12); ui.trackText:SetPoint('TOPLEFT', ui.summary, 'BOTTOMLEFT', 0, -6); ui.trackText:SetWidth(IW); ui.trackText:SetSpacing(3)
 	held:SetPoint('TOPLEFT', ui.trackText, 'BOTTOMLEFT', 0, -6); held:SetSize(IW, 16)
-	held.text = S.Text(held, 11, C.muted); held.text:SetPoint('LEFT'); held.text:SetPoint('RIGHT'); held.text:SetWordWrap(false)
+	held.text = S.Text(held, 11, C.muted); held.text:SetPoint('TOPLEFT'); held.text:SetWidth(IW); held.text:SetWordWrap(true); held.text:SetSpacing(2)
 	held:EnableMouse(true)
 	held:SetScript('OnEnter', function(self)
 		if not self.lines then return end
 		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
-		GameTooltip:AddLine('Held writs and items')
+		GameTooltip:AddLine('What you already have')
+		GameTooltip:AddLine('Counted from your bags, mailbox and bank, and left off the buy list.', 1, 1, 1, true)
 		for _, l in ipairs(self.lines) do GameTooltip:AddDoubleLine(l[1], l[2], 0.9, 0.9, 0.9, 0.6, 0.6, 0.6) end
 		GameTooltip:Show()
 	end)
@@ -1681,7 +700,14 @@ local function build()
 		if v == 'all' then setStatus("Buying for every day: today's prices for all of them; later days' could be lower or higher") end
 		if plan and ui.doPlan then ui.doPlan() else refresh() end
 	end
-	ui.scopeBtn = S.Button(f, 'For today', 104, 20, function() scope((mine().scope or 'day') == 'day' and 'all' or 'day') end)
+	ui.scopeBtn = S.Button(f, 'Buy: today', 112, 20, function() scope((mine().scope or 'day') == 'day' and 'all' or 'day') end)
+	ui.scopeBtn:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+		GameTooltip:AddLine('What to buy now')
+		GameTooltip:AddLine('Your plan runs over more than one day. Buy today\'s writs only, or every day\'s now at today\'s prices. Click to switch.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	ui.scopeBtn:HookScript('OnLeave', function() GameTooltip:Hide() end)
 	ui.scopeBtn:SetPoint('RIGHT', f, 'RIGHT', -PAD, 0); ui.scopeBtn:SetPoint('BOTTOM', listHead, 'BOTTOM', 0, -6)
 	local box = CreateFrame('Frame', nil, f)
 	box:SetPoint('TOPLEFT', listHead, 'BOTTOMLEFT', 0, -8)
@@ -1711,35 +737,50 @@ local function build()
 
 	local op = CreateFrame('Frame', nil, f)
 	op:SetFrameStrata('DIALOG')
-	op:SetSize(260, 156)
+	op:SetSize(260, 190)
 	op:SetPoint('TOPRIGHT', f, 'TOPRIGHT', -4, -34)
 	S.Box(op, C.panel, C.gold)
 	local function row(text, y) local t = S.Text(op, 11, C.muted); t:SetPoint('TOPLEFT', 10, y); t:SetText(text); return t end
-	row('Free bag slots', -10)
-	ui.bagsText = S.Text(op, 12, C.text); ui.bagsText:SetPoint('TOPLEFT', 10, -30); ui.bagsText:SetWidth(112)
-	local bagTip = CreateFrame('Frame', nil, op)
-	bagTip:SetPoint('TOPLEFT', 6, -6); bagTip:SetSize(118, 44); bagTip:EnableMouse(true)
-	bagTip:SetScript('OnEnter', function(self)
-		GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
-		GameTooltip:AddLine('Free bag slots')
-		GameTooltip:AddLine('Counted from your bags. The route stops at a mailbox for as many writs and items as fit, hands them in, and stops at the next mailbox for more. More free slots: fewer mailbox stops.', 1, 1, 1, true)
-		GameTooltip:Show()
-	end)
-	bagTip:SetScript('OnLeave', function() GameTooltip:Hide() end)
-	row('Buy for', -10):SetPoint('TOPLEFT', 130, -10)
-	ui.scopeBtn:SetParent(op); ui.scopeBtn:ClearAllPoints(); ui.scopeBtn:SetPoint('TOPLEFT', 130, -26); ui.scopeBtn:SetSize(110, 24)
-	row('Thinly listed writs', -60)
-	local stockOpts = function() local o = {}; for _, n in ipairs({ 0, 3, 5, 10 }) do o[#o + 1] = { text = n == 0 and 'Plan them all' or ('Skip under ' .. n .. ' listed'), value = n } end; return o end
+	local opTitle = S.Text(op, 13, C.gold); opTitle:SetPoint('TOPLEFT', 10, -10); opTitle:SetText('Plan options')
+	row('Skip writs with few listings', -36)
+	local stockOpts = function() local o = {}; for _, n in ipairs({ 0, 3, 5, 10 }) do o[#o + 1] = { text = n == 0 and 'Never skip' or ('Fewer than ' .. n .. ' listed'), value = n } end; return o end
 	ui.stock = dropdown(op, 110, stockOpts, function() return settings().stock end, function(v) settings().stock = v end)
-	ui.stock:SetParent(op); ui.stock:ClearAllPoints(); ui.stock:SetPoint('TOPLEFT', 10, -76); ui.stock:SetWidth(150)
+	ui.stock:SetParent(op); ui.stock:ClearAllPoints(); ui.stock:SetPoint('TOPLEFT', 10, -52); ui.stock:SetWidth(170)
 	ui.stock:HookScript('OnEnter', function(self)
 		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
-		GameTooltip:AddLine('Thinly listed writs')
-		GameTooltip:AddLine('Leave out a writ when fewer than this many of it, or of the item it wants, are on the Auction House: a few listings are often bait or gone by the time you buy. Writs you already hold are always planned.', 1, 1, 1, true)
+		GameTooltip:AddLine('Skip writs with few listings')
+		GameTooltip:AddLine('Leaves a writ out of the plan when fewer than this many of it, or of the item it wants, are on the Auction House: a few listings are often bait or gone by the time you buy. Writs you already hold are always planned.', 1, 1, 1, true)
 		GameTooltip:Show()
 	end)
 	ui.stock:HookScript('OnLeave', function() GameTooltip:Hide() end)
-	ui.found = S.Text(op, 11, C.text); ui.found:SetPoint('TOPLEFT', 10, -110); ui.found:SetWidth(230)
+	row('Forged Delivery Receipts', -134)
+	local rcOpts = function()
+		local o = {}
+		for _, n in ipairs({ 0, 99, 100 }) do o[#o + 1] = { text = n == 0 and 'Off: writs only' or n == 99 and 'On: crates where cheaper' or 'Crates only: no writs', value = n } end
+		return o
+	end
+	ui.receipts = dropdown(op, 200, rcOpts, function() local v = settings().receipts or 0; return v >= 100 and 100 or v > 0 and 99 or 0 end, function(v) settings().receipts = v end)
+	ui.receipts:SetPoint('TOPLEFT', 10, -150)
+	ui.receipts:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:AddLine('Forged Delivery Receipts')
+		GameTooltip:AddLine('A receipt (15 Merchant\'s Favor from the Uncertified Scribe, from Friendly) on an empty Waylaid Crate hands it in for 50 reputation. On: the plan uses crates in place of writs where that is cheaper or quicker. The Favor you hold is used first; for the rest, crates to fill and their bundles go on the buy list too. Crates only: no writs at all, and if too few crates are up the plan says how far they get you. Each hand-in pays 1s back, which is counted.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	ui.receipts:HookScript('OnLeave', function() GameTooltip:Hide() end)
+	row('Panel size', -86)
+	local smaller = S.Button(op, 'A-', 34, 22, function() setScale(settings().scale - 0.05); refresh() end); smaller:SetPoint('TOPLEFT', 10, -102)
+	local bigger = S.Button(op, 'A+', 34, 22, function() setScale(settings().scale + 0.05); refresh() end); bigger:SetPoint('LEFT', smaller, 'RIGHT', 4, 0)
+	ui.sizeText = S.Text(op, 12, C.text); ui.sizeText:SetPoint('LEFT', bigger, 'RIGHT', 10, 0)
+	local all = S.Button(op, 'All settings', 92, 20, function() op:Hide(); if ns.Options then ns.Options.Open() end end)
+	all:SetPoint('TOPRIGHT', -8, -6)
+	all:HookScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_RIGHT')
+		GameTooltip:AddLine('All settings')
+		GameTooltip:AddLine('Opens the addon\'s page in the game\'s options (Esc, Options, AddOns): item tooltips, the minimap button, the mailbox and bank reminder, the size of the panel.', 1, 1, 1, true)
+		GameTooltip:Show()
+	end)
+	all:HookScript('OnLeave', function() GameTooltip:Hide() end)
 	op:Hide()
 	ui.opts = op
 	if ui.status.SetMaxLines then ui.status:SetMaxLines(2) end
@@ -1754,23 +795,42 @@ local function layout(favor)
 	local function put(o, ...) o:ClearAllPoints(); o:SetPoint(...) end
 	local half = math.floor((IW - 8) / 2)
 	local third = math.floor((IW - 16) / 3)
-	if ui.laidOut ~= favor then
-		ui.laidOut = favor
+	local rcRow = not favor and ((settings().receipts or 0) > 0 or (settings().favorWant or 0) > 0 or ui.labelFill ~= nil)
+	local key = favor and 'favor' or rcRow and 'receipts' or 'writs'
+	if ui.laidOut ~= key then
+		ui.laidOut = key
 		if favor then
-			ui.goal:SetWidth(112); put(ui.goal, 'TOPLEFT', PAD, -72)
-			ui.reach:Hide()
-			ui.scan:SetSize(IW - 112 - 8, 24); put(ui.scan, 'TOPLEFT', ui.goal, 'TOPRIGHT', 8, 0)
-			put(ui.todayHead, 'TOPLEFT', PAD, -110)
+			if FAVOR_ONLY then
+				ui.goal:Hide(); ui.reach:Hide(); ui.favorHint:Hide()
+				put(ui.favorLabel, 'TOPLEFT', PAD, -78)
+				put(ui.favorBox, 'TOPLEFT', PAD + 44, -72)
+				put(ui.recipesBtn, 'TOPLEFT', ui.favorBox, 'TOPRIGHT', 8, 0)
+				ui.scan:SetSize(IW - 44 - 64 - 8 - 72 - 8, 24); put(ui.scan, 'TOPLEFT', ui.recipesBtn, 'TOPRIGHT', 8, 0)
+				put(ui.todayHead, 'TOPLEFT', PAD, -110)
+			else
+				ui.reach:Show()
+				ui.goal:SetWidth(120); put(ui.goal, 'TOPLEFT', PAD + 44, -76)
+				ui.scan:SetSize(IW - 44 - 120 - 6, 24); put(ui.scan, 'TOPLEFT', ui.goal, 'TOPRIGHT', 6, 0)
+				put(ui.favorLabel, 'TOPLEFT', PAD, -110)
+				put(ui.favorBox, 'TOPLEFT', PAD + 44, -104)
+				put(ui.recipesBtn, 'TOPLEFT', ui.favorBox, 'TOPRIGHT', 8, 0)
+				put(ui.favorHint, 'LEFT', ui.recipesBtn, 'RIGHT', 8, 0)
+				put(ui.todayHead, 'TOPLEFT', PAD, -140)
+			end
 			put(ui.listHead, 'TOPLEFT', ui.trackText, 'BOTTOMLEFT', 0, -12)
 		else
 			ui.reach:Show()
-			ui.goal:SetWidth(92); put(ui.goal, 'TOPLEFT', PAD + 44, -76)
-			ui.days:SetWidth(92); put(ui.days, 'TOPLEFT', ui.goal, 'TOPRIGHT', 6, 0)
-			ui.scan:SetSize(IW - 44 - 92 - 92 - 12, 24); put(ui.scan, 'TOPLEFT', ui.days, 'TOPRIGHT', 6, 0)
-			put(ui.timeBits[2], 'TOPLEFT', PAD, -110)
-			put(ui.timeBits[3], 'TOPRIGHT', -PAD, -110)
-			ui.slider:SetWidth(IW - 130); put(ui.slider, 'TOP', ui.frame, 'TOP', 0, -108)
-			put(ui.todayHead, 'TOPLEFT', PAD, -136)
+			ui.goal:SetWidth(104); put(ui.goal, 'TOPLEFT', PAD + 44, -76)
+			ui.days:SetWidth(104); put(ui.days, 'TOPLEFT', ui.goal, 'TOPRIGHT', 6, 0)
+			ui.scan:SetSize(IW - 44 - 104 - 104 - 12, 24); put(ui.scan, 'TOPLEFT', ui.days, 'TOPRIGHT', 6, 0)
+			put(ui.favorLabel, 'TOPLEFT', PAD, -110)
+			put(ui.favorBox, 'TOPLEFT', PAD + 44, -104)
+			put(ui.recipesBtn, 'TOPLEFT', ui.favorBox, 'TOPRIGHT', 8, 0)
+			put(ui.favorHint, 'LEFT', ui.recipesBtn, 'RIGHT', 8, 0)
+			put(ui.timeBits[2], 'TOPLEFT', PAD, -138)
+			put(ui.timeBits[3], 'TOPRIGHT', -PAD, -138)
+			ui.slider:SetWidth(IW - 130); put(ui.slider, 'TOP', ui.frame, 'TOP', 0, -136)
+			put(ui.todayHead, 'TOPLEFT', PAD, -164)
 			put(ui.listHead, 'TOPLEFT', ui.held, 'BOTTOMLEFT', 0, -12)
 		end
 		put(ui.box, 'TOPLEFT', ui.listHead, 'BOTTOMLEFT', 0, -8); ui.box:SetWidth(IW)
@@ -1780,7 +840,11 @@ local function layout(favor)
 		ui.fill:SetSize(third, 28)
 		ui.auto:SetSize(third, 28); put(ui.auto, 'TOPLEFT', ui.buy, 'BOTTOMLEFT', third + 8, -8)
 		ui.way:SetSize(third, 28); put(ui.way, 'TOPLEFT', ui.auto, 'TOPRIGHT', 8, 0)
-		put(ui.status, 'TOPLEFT', ui.buy, 'BOTTOMLEFT', 0, favor and -(8 + 28 + 10) or -10)
+		ui.stamp:SetSize(third, 28)
+		local rowsUnder = ((favor or rcRow) and 1 or 0) + (favor and 0 or 1)
+		ui.guide:SetSize(half, 28); put(ui.guide, 'TOPLEFT', ui.buy, 'BOTTOMLEFT', 0, rcRow and -(8 + 28 + 8) or -8)
+		ui.rxp:SetSize(half, 28); put(ui.rxp, 'TOPLEFT', ui.guide, 'TOPRIGHT', 8, 0)
+		put(ui.status, 'TOPLEFT', ui.buy, 'BOTTOMLEFT', 0, rowsUnder > 0 and -(rowsUnder * 36 + 10) or -10)
 	end
 	local list = Buy.List()
 	local n = math.max(LIST_MIN, math.min(LIST_MAX, list and #list or 0))
@@ -1795,9 +859,15 @@ local function layout(favor)
 		end
 		ui.fill:ClearAllPoints()
 		ui.fill:SetPoint('TOPLEFT', f, 'TOPLEFT', PAD, -math.floor(top - buyBottom + 8))
+		ui.stamp:ClearAllPoints()
+		ui.stamp:SetPoint('TOPLEFT', f, 'TOPLEFT', PAD + third + 8, -math.floor(top - buyBottom + 8))
+		for _, b in ipairs({ ui.fill, ui.stamp, ui.auto, ui.way, ui.guide, ui.rxp }) do
+			local l = b.label
+			local t = l and l:GetText()
+			if t and t ~= '' then l:SetText(''); l:SetText(t) end
+		end
 		local h = math.floor(top - bottom + 12)
 		f:SetHeight(h)
-		if ui.mapWin then ui.mapWin:SetHeight(h) end
 	end
 	C_Timer.After(0, settle)
 end
@@ -1820,38 +890,49 @@ function refreshBody(msg, err)
 	else
 		a.item = lb.item
 		a.icon:SetTexture(GetIcon and GetIcon(lb.item) or 134400)
-		a.text:SetText(lb.held and 'Shipping Label in your bags: use it, then hand it in to ' .. NPC_AT .. '. +2,000 rep, counted in the plan'
-			or lb.onQuest and 'Shipping Label quest: hand it in to ' .. NPC_AT .. '. +2,000 rep, counted in the plan'
-			or 'Shipping Label not done: +2,000 rep, once, counted in the plan. It comes with your first writs; ' .. NPC_AT .. ' takes it')
+		local inMail = ((State.Char(db) or {}).mail or {})[lb.item]
+		a.text:SetText(lb.held and 'Shipping Label: use it (click this), then hand it in to ' .. NPC_AT .. ' for +2,000 rep and 50 Favor (in the plan).'
+			or lb.banked and 'Shipping Label: it is in your bank. Take it out, use it, and hand it in to ' .. NPC_AT .. ' for +2,000 rep.'
+			or inMail and 'Shipping Label: it is in your mail. Take it out, use it, and hand it in to ' .. NPC_AT .. ' for +2,000 rep.'
+			or lb.onQuest and 'Shipping Label: hand it in to ' .. NPC_AT .. ' for +2,000 rep (in the plan).'
+			or 'Shipping Label not done: +2,000 rep and 50 Favor, once (in the plan). The first Waylaid Crate you fill gives it; hand it in to ' .. NPC_AT .. '.')
 		a:Show()
+		local th = a.text:GetStringHeight()
+		a:SetHeight(math.max(40, ((th and th > 10) and th or 28) + 20))
 	end
 	ui.summary:ClearAllPoints()
-	if a:IsShown() then ui.summary:SetPoint('TOPLEFT', a, 'BOTTOMLEFT', 0, -8) else ui.summary:SetPoint('TOPLEFT', ui.todayHead, 'BOTTOMLEFT', 0, -10) end
+	if a:IsShown() then ui.summary:SetPoint('TOPLEFT', a, 'BOTTOMLEFT', 0, -12) else ui.summary:SetPoint('TOPLEFT', ui.todayHead, 'BOTTOMLEFT', 0, -14) end
 	local sc = mine().scope or 'day'
-	ui.scopeBtn:SetText(sc == 'all' and 'For every day' or 'For today')
+	ui.scopeBtn:SetText(sc == 'all' and 'Buy: every day' or 'Buy: today')
 	ui.listHead:SetText(oneOff and ('BUY LIST  ' .. WHITE .. 'from the table: ' .. (oneOff.title or '') .. '|r') or ui.buyHead or 'BUY LIST')
-	ui.routeBtn.label:SetTextColor(unpack((ui.mapWin and ui.mapWin:IsShown()) and C.gold or C.text))
-	if routeShown() then ui.drawRoute() end
 	ui.drawHeld()
 	local raw, standing, name = State.Rep()
-	local goal = State.GOALS[settings().goal]
+	local goal = State.GOALS[settings().goal] or State.GOALS[1]
 	local favor = mine().mode == 'favor'
 	ui.title:SetText(FAVOR_ONLY and "Merchant's Favor" or 'Writs and Favors')
-	ui.todayHead:SetText(favor and 'THIS PURCHASE' or 'THIS PLAN')
+	ui.todayHead:SetText(favor and 'THIS PURCHASE' or 'PLAN')
 	ui.trackText:SetText(ui.trackLine())
 	ui.optsBtn:SetShown(not favor)
 	if favor then ui.opts:Hide() end
 	if ui.stock then ui.stock.update() end
-	do
-		local _, cls = UnitClass('player')
-		local hs = State.Hearth()
-		ui.found:SetText(('Hearthstone: %s\nTeleports: %s'):format(hs and D.nodes[hs] and D.nodes[hs][1] or 'not a known inn', cls == 'MAGE' and ('mage (' .. MAGE_NAMES .. ')') or cls == 'DRUID' and 'druid (Moonglade)' or 'none'))
+	ui.sizeText:SetText(math.floor((settings().scale or 1) * 100 + 0.5) .. '%')
+	if not favor then
+		local tip
+		if plan and plan.route then
+			tip = { 'This plan', 'The gold on the first line is your cost after the hand-ins pay out: what you pay at the Auction House, less the writs\' coin pouches, the money for crates filled for Favor, and the 1s a receipt crate pays.' }
+			if plan.payNow and (plan.payBack or 0) > 0 then
+				tip[#tip + 1] = { 'Pay now', Plan.Money(plan.payNow) }
+				tip[#tip + 1] = { 'Back at hand-in, about', Plan.Money(plan.payBack) }
+			end
+			tip[#tip + 1] = 'The minutes are the hand-in run: flights, rides and mailbox stops.'
+			for _, m in ipairs(plan.more or {}) do tip[#tip + 1] = m end
+		end
+		ui.summaryTip = tip
 	end
-	if not favor then ui.summaryTip = nil end
-	ui.modeBtn:SetText(favor and 'Writs' or 'Favor')
-	ui.held2:Hide(); ui.rxp:Hide(); ui.routeBtn:SetShown(not favor)
+	ui.modeBtn:SetText(favor and 'Rep' or 'Favor')
+	ui.guide:SetShown(not favor); ui.rxp:SetShown(not favor)
 	ui.plan:Hide()
-	ui.modeBtn:SetShown(not FAVOR_ONLY)
+	ui.modeBtn:Hide()
 	ui.goalHead:Hide()
 	ui.held:SetShown(not favor)
 	ui.minute:Hide()
@@ -1860,9 +941,9 @@ function refreshBody(msg, err)
 	ui.way:SetShown(favor)
 	ui.auto:SetText(settings().autoHandIn ~= false and 'Auto hand-in: on' or 'Auto hand-in: off')
 	ui.auto.label:SetTextColor(unpack(settings().autoHandIn ~= false and C.gold or C.muted))
-	if not InCombatLockdown() then ui.fill:SetShown(favor) end
-	ui.fill.update()
-	if favor and ui.mapWin then ui.mapWin:Hide() end
+	local rcOn = not favor and ((settings().receipts or 0) > 0 or (settings().favorWant or 0) > 0 or ui.labelFill ~= nil)
+	if not InCombatLockdown() then ui.fill:SetShown(favor or rcOn); ui.stamp:SetShown(rcOn) end
+	ui.fill.update(); ui.stamp.update()
 	if favor then
 		local have = State.Favor(db)
 		ui.faction:SetText("Merchant's Favor" .. (have and ('  ' .. WHITE .. commas(have) .. '|r') or ''))
@@ -1876,17 +957,16 @@ function refreshBody(msg, err)
 		ui.bar:SetMinMaxValues(0, goal[2])
 		ui.bar:SetValue(math.min(raw, goal[2]))
 	end
-	ui.goal.update(); ui.days.update()
-	do
-		local free = State.FreeSlots()
-		ui.bagsText:SetText(free and (free .. (free < 12 and (RED .. '  (make room)|r') or '')) or (MUTED .. 'not known|r'))
-	end
+	ui.goal.update(); ui.days.update(); ui.receipts.update(); ui.favorBox.update()
 	ui.days:SetShown(not favor)
+	ui.planRow:SetShown(not favor)
+	ui.colourPlanRow()
+	ui.scopeBtn:SetShown(not favor and (settings().days or 1) > 1 and not oneOff)
 	for _, x in ipairs(ui.timeBits) do x:SetShown(not favor) end
 	local now_ = GetServerTime and GetServerTime() or time()
 	local age = favor and (db.favorAt and (('live prices %d min old'):format(math.floor((now_ - db.favorAt) / 60))) or 'no crate scan yet')
 		or (db.scanAt and (('prices %d min old'):format(math.floor((now_ - db.scanAt) / 60))) or 'no scan yet')
-	ui.status:SetText((status and ((statusErr and RED or GOLD) .. status .. '|r   ') or '') .. MUTED .. age .. '|r')
+	ui.status:SetText((status and ((statusErr and RED or GOLD) .. status .. '|r   ') or '') .. MUTED .. nb(age) .. '|r')
 	ui.scan:SetText(favor and 'Scan crates' or (Scan.Quick(db) and 'Scan again' or 'Scan'))
 	local list, cur = Buy.List()
 	local n = list and #list or 0
@@ -1915,7 +995,13 @@ function refreshBody(msg, err)
 	ui.list:SetHeight(math.max(1, n * ROW))
 	if ui.layout then ui.layout(mine().mode == 'favor') end
 	ui.empty:SetShown(n == 0)
-	ui.empty:SetText(plan and plan.reason or (mine().mode == 'favor' and 'Click Scan crates: your buy list shows here.' or 'Scan the Auction House, then Plan. Your buy list shows here.'))
+	if n == 0 and ui.listFrame.SetVerticalScroll then ui.listFrame:SetVerticalScroll(0) end
+	local emptyText = plan and plan.reason and 'Nothing to buy.'
+	if ui.mapSource == 'held' and mine().mode ~= 'favor' then emptyText = 'Nothing to buy: these are the writs you already hold.' end
+	if not emptyText and plan and plan.shopping and #plan.shopping == 0 and mine().mode ~= 'favor' then
+		emptyText = 'Nothing to buy: you already hold what this plan needs.' .. (ui.takeOut and ('\n\nFirst ' .. ui.takeOut .. '. Then Fill and Receipt light up.') or '')
+	end
+	ui.empty:SetText(emptyText or (mine().mode == 'favor' and 'Click Scan crates: your buy list shows here.' or 'Click Scan: your buy list shows here.'))
 	local p = Buy.Pending()
 	if p and Buy.Step() == 'ready' then
 		ui.buy:SetText(Buy.Label())
@@ -1929,20 +1015,32 @@ function refreshBody(msg, err)
 end
 
 local function noPlan(why, msg, rows)
-	plan = { reason = why, rows = rows, mine = mine().planMode == 'picks' or nil }
+	plan = { reason = why, rows = rows }
 	clearBuy()
-	ui.summary:SetText('')
+	ui.buyHead = nil
+	ui.summary:SetText(RED .. why .. '|r')
+	ui.summaryTip = nil
 	refresh(msg or why, true)
+end
+
+local function tooLow()
+	local level = UnitLevel and UnitLevel('player') or 0
+	if level <= 0 or level >= Plan.MIN_LEVEL then return false end
+	noPlan(('You are level %d: writs and Waylaid Crates need level %d, so this character has nothing to plan. Open the panel on the character who will hand them in.'):format(level, Plan.MIN_LEVEL), 'Needs level ' .. Plan.MIN_LEVEL)
+	return true
 end
 
 local function planNow()
 	local raw = State.Rep()
-	local goal = State.GOALS[settings().goal]
+	local goal = State.GOALS[settings().goal] or State.GOALS[2]
 	local label = State.Label()
 	local labelRep = label.done and 0 or label.rep
 	local need = goal[2] - raw - labelRep
-	if goal[2] - raw <= 0 then return noPlan(('You are already %s (%s). Pick a higher goal.'):format(goal[1], commas(raw)), 'Already at the goal') end
-	if need <= 0 then return noPlan(('The Shipping Label alone gets you to %s: hand it in to ' .. NPC_AT .. ' (+2,000).'):format(goal[1]), 'Shipping Label is enough') end
+	if goal[2] - raw <= 0 then return noPlan(('You are already %s (%s). Pick a higher standing, or No reputation to plan Favor alone.'):format(goal[1], commas(raw)), 'Already at the goal') end
+	if tooLow() then return end
+	if need <= 0 then return noPlan(('The Shipping Label alone gets you to %s: %shand it in to ' .. NPC_AT .. ' (+2,000).'):format(goal[1], labelNeedsCrate(label) and 'fill any one Waylaid Crate to get it, then ' or ''), 'Shipping Label is enough') end
+	ui.labelFill = nil
+	local unread = useFlights()
 	local s = settings()
 	local p, fb = prices()
 	local state = State.Read(db)
@@ -1956,43 +1054,131 @@ local function planNow()
 		if r.done then doneToday = doneToday + 1 end
 	end
 	if not anyPrice then return noPlan('No prices yet: open the Auction House and click Scan.', 'No prices yet') end
-	local set = picksOf()
-	local picked = 0
-	for _, r in ipairs(rows) do
-		if set[r.writ] then
-			r.picked = true
-			if not r.done then picked = picked + 1 end
-			if not r.cost and r.writCost and r.itemCost then r.cost = r.writCost + r.itemCost - r.pouch end
-		end
+	local allRows = rows
+	local myLevel = UnitLevel and UnitLevel('player') or 0
+	local toFriendly = math.max(0, State.GOALS[1][2] - raw - labelRep)
+	local levelOut
+	rows, levelOut = Plan.ForWrits({ rows = rows, level = myLevel, start = start, all = s.allZones, toFriendly = toFriendly, target = (s.receipts or 0) > 0 and toFriendly > 0 and toFriendly or need, days = s.days })
+	local function ladder(id)
+		local x = p[id]
+		if not x then return nil end
+		if x.ladder and #x.ladder > 0 then return x.ladder end
+		if x.each then return { { x.each, x.up or 0 } } end
 	end
-	local mineMode = mine().planMode == 'picks'
-	if mineMode then
-		plan = Plan.Picked({ rows = rows, picks = set, need = need })
-		plan.rows = rows
-		if #plan.picks == 0 then
-			plan.route, plan.shopping = nil, {}
-			clearBuy()
-			ui.buyHead = 'BUY LIST  ' .. WHITE .. 'my picks: none yet|r'
-			ui.summary:SetText(WHITE .. 'My picks: none yet|r\n' .. MUTED .. 'Open Route: every writ is on the map. Click one to pick it; the shopping list and the route follow.|r')
-			return refresh(picked > 0 and 'My picks: none of them can be done today' or 'My picks: pick writs on the map (Route)')
+	local heldOK, tooHigh, tooHighAt
+	ladder, heldOK, tooHigh, tooHighAt = Plan.ForLevel(myLevel, ladder, state.items)
+	label.needsCrate = labelNeedsCrate(label, (state.from or {}).mail) or nil
+	local labelFavor = label.done and 0 or (label.favor or 0)
+	do
+		local function goalFor(n, today)
+			if today and s.days > 1 then
+				local g = Plan.Goal({ rows = rows, need = n, days = 1, perSec = s.minute / 60, start = start })
+				if g.got >= n then return g end
+			end
+			return Plan.Goal({ rows = rows, need = n, days = s.days, perSec = s.minute / 60, start = start })
 		end
-	else
-		plan = Plan.Goal({ rows = rows, need = need, days = s.days, perSec = s.minute / 60, start = start, force = set })
-		plan.rows = rows
+		local cap = s.receipts or 0
+		local rc, why, tries, base
+		ui.tooHigh, ui.tooHighAt = nil, nil
+		local favorWant = s.favorWant or 0
+		if (cap > 0 or favorWant > 0) and need > 0 and D.dokimi then
+			local R = Plan.RECEIPT
+			local favorHeld = (State.Favor(db) or 0) + labelFavor
+			ui.tooHigh, ui.tooHighAt = tooHigh, tooHighAt
+			local rcHeld, heldSum = (C_Item and C_Item.GetItemCount or GetItemCount)(R.item, true) or 0, 0
+			for _, c in ipairs(D.waylaid.crates) do
+				heldSum = heldSum + (state.items[c[1]] or 0) * 7
+				for _, o in ipairs(c[5]) do heldSum = heldSum + (state.items[o[1]] or 0) end
+			end
+			for _, t in pairs(D.waylaid.sealed) do for _, id in pairs(t) do heldSum = heldSum + (state.items[id] or 0) * 13 end end
+			local key = table.concat({ need, s.days, s.minute, cap, math.floor(favorHeld / R.favor), rcHeld, heldSum, toFriendly, db.scanAt or 0, db.favorAt or 0, db.favorFullAt or 0, start, held, doneToday, myLevel, favorWant, tostring(s.allZones), ns.Net and ns.Net.Key() or '' }, ':')
+			local kept = ui.rcKept and ui.rcKept.key == key and ui.rcKept.n or nil
+			rc, why, tries, base = Plan.Receipts({ need = need, ladder = ladder, favorHeld = favorHeld, held = heldOK, receiptsHeld = rcHeld, extra = favorWant, max = cap <= 0 and 0 or nil, writsFirst = toFriendly, goalFor = goalFor, trip = Plan.TripCost(start, s.minute / 60, D.dokimi), only = cap >= 100, fixed = kept })
+			if not kept then ns.Log(('receipts: %d Favor held; tried %s; %s'):format(favorHeld, table.concat((rc and rc.tries) or tries or {}, ', '), rc and ('chose ' .. rc.n) or ('none: ' .. tostring(why)))) end
+			ui.rcKept = { key = key, n = rc and rc.n or 0 }
+			if rc then
+				plan = rc.goal
+				rc.today, rc.favorHeld, rc.receiptsHeld, rc.writsFirst = rc.n, favorHeld, rcHeld, toFriendly
+				plan.receipts = rc
+				plan.need, plan.got, plan.gold = need, plan.got + rc.n * R.rep, plan.gold + rc.cost + rc.favorGold
+				plan.days = { plan.days[1] and { day = 1, writs = plan.days[1].writs, rep = plan.days[1].rep, gold = plan.days[1].gold } or { day = 1, writs = {}, rep = 0, gold = 0 }, unpack(plan.days, 2) }
+				plan.days[1].rep, plan.days[1].gold = plan.days[1].rep + rc.n * R.rep, plan.days[1].gold + rc.cost + rc.favorGold
+			end
+		end
+		if not rc then
+			if cap >= 100 and why and not why:find('Friendly', 1, true) then
+				return noPlan(('Crates only, and no receipt crates can be planned: %s. Scan again, or allow writs (the cog).'):format(why), 'No crates to plan', rows)
+			end
+			plan = base or goalFor(need)
+			plan.receiptWhy = why
+		end
+		plan.rows = allRows
 	end
+	ns.Log(('plan: level %d, %d writs left out for it'):format(myLevel, levelOut or 0))
 	ns.Log(('plan: need %d, %d priced, %d plannable, %d handed in today (%d by the game, %d seen by us), %d picks, today max %d'):format(need, priced, plan.usable, doneToday, state.doneBy.flag, state.doneBy.ours, #plan.picks, plan.today))
-	if plan.usable == 0 then
+	if plan.usable == 0 and not plan.receipts then
+		if (levelOut or 0) > 0 then return noPlan(('No writ can be planned for level %d: %d are for higher levels or out of reach. Scan again later, or turn off "Only plan writ hand-ins for my level" (All settings).'):format(myLevel, levelOut), 'Nothing for your level', allRows) end
 		return noPlan(('No writ can be planned: %d priced with %d+ up (writ and item), none with a known hand-in. Try Scan again.'):format(priced, s.stock), 'Nothing to plan', rows)
 	end
 	local day = plan.days[1]
-	if not day or #day.writs == 0 then
-		if plan.today == 0 then return noPlan(('Nothing to plan today: all %d writs you could do are handed in today. Plan again after the daily reset.'):format(plan.doneToday), 'Nothing to plan today', rows) end
+	if not day or (#day.writs == 0 and not plan.receipts) then
+		if plan.today == 0 then return noPlan(('Nothing to plan today: all %d writs you could do are handed in today. Scan again after the daily reset.'):format(plan.doneToday), 'Nothing to plan today', rows) end
 		return noPlan(('Nothing planned for today (%d writs could be). /writs debug says more.'):format(plan.usable), 'Nothing to plan today', rows)
 	end
 	local _, class = UnitClass('player')
-	plan.route = Plan.Route({ writs = day.writs, start = start, bags = bagCap(), hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE', label = not label.done and label or nil })
-	local scope = mineMode and 'day' or (mine().scope or 'day')
+	local stage1 = plan.receipts and plan.receipts.n > 0 and (plan.receipts.favorShort or 0) > 0 and plan.receipts.favorPlan and true or false
+	plan.stage = stage1 and 1 or (plan.receipts and plan.receipts.n > 0 and 2) or nil
+	local labelPlan
+	if label.needsCrate then
+		local fills = plan.receipts and plan.receipts.favorPlan and #plan.receipts.favorPlan.crates > 0
+		if not fills then
+			labelPlan = Plan.LabelCrate(ladder, heldOK, plan.receipts and plan.receipts.units)
+			if labelPlan then ui.labelFill = labelPlan.crates end
+		end
+	end
+	local favorOnlyCrates, favorOnlySlots
+	if labelPlan and not (plan.receipts and plan.receipts.n > 0 and not stage1) then
+		favorOnlyCrates, favorOnlySlots = Guide.CrateGroups(labelPlan.crates), 2
+	end
+	if plan.receipts and (plan.receipts.n == 0 or stage1) and plan.receipts.favorPlan and #plan.receipts.favorPlan.crates > 0 and Guide and Guide.CrateGroups then
+		favorOnlyCrates, favorOnlySlots = Guide.CrateGroups(plan.receipts.favorPlan.crates), 0
+		for _, c in ipairs(plan.receipts.favorPlan.crates) do favorOnlySlots = favorOnlySlots + math.ceil(c.count / 5) + #(c.bundles or {}) end
+	end
+	plan.route = Plan.Route({ writs = day.writs, level = myLevel, start = start, bags = bagCap(), hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE', label = not label.done and label or nil, receipts = not stage1 and plan.receipts and plan.receipts.today or nil, receiptFill = not stage1 and plan.receipts and (labelPlan and labelPlan.crates or plan.receipts.favorPlan and plan.receipts.favorPlan.crates) or nil, crates = favorOnlyCrates, crateSlots = favorOnlySlots, receiptsLast = not stage1 and plan.receipts and (plan.receipts.writsFirst or 0) > 0 or nil })
+	local scope = mine().scope or 'day'
 	plan.shopping = Plan.Shopping(scope == 'all' and plan.days or { day }, p, state.held, state.items)
+	if plan.receipts then
+		local rc = plan.receipts
+		local want, order, empties = {}, {}, {}
+		local function add(id, n) if not want[id] then want[id] = 0; order[#order + 1] = id end; want[id] = want[id] + n end
+		for _, u in ipairs(stage1 and {} or rc.units) do
+			if not u.held then add(u.id, 1); empties[u.id] = (empties[u.id] or 0) + 1 end
+		end
+		if rc.favorPlan then for _, b in ipairs(rc.favorPlan.buy) do if (b.units or 0) > 0 then add(b.item, b.units) end end end
+		for _, id in ipairs(order) do
+			local n = want[id]
+			local cost = Plan.CostOf(p[id], n)
+			plan.shopping[#plan.shopping + 1] = { id = id, name = (D.waylaid.names and D.waylaid.names[id]) or ('item ' .. id), need = n, cost = cost, each = cost and math.floor(cost / n + 0.5) or nil,
+				repText = empties[id] and ('+' .. (empties[id] * Plan.RECEIPT.rep) .. ' rep') or 'for Favor' }
+		end
+	end
+	if labelPlan then
+		for _, b in ipairs(labelPlan.buy) do
+			if (b.units or 0) > 0 then
+				local line
+				for _, e in ipairs(plan.shopping) do if e.id == b.item then line = e end end
+				if line then
+					line.need = line.need + b.units
+					line.cost = Plan.CostOf(p[b.item], line.need)
+					line.each = line.cost and math.floor(line.cost / line.need + 0.5) or nil
+				else
+					plan.shopping[#plan.shopping + 1] = { id = b.item, name = (D.waylaid.names and D.waylaid.names[b.item]) or ('item ' .. b.item), need = b.units, cost = b.cost, each = math.floor(b.cost / b.units + 0.5), repText = 'for the Label' }
+				end
+			end
+		end
+		plan.gold = plan.gold + labelPlan.cost
+		day = { day = 1, writs = day.writs, rep = day.rep, gold = day.gold + labelPlan.cost }
+	end
 	do
 		local pos, k = {}, 0
 		for _, l in ipairs(plan.route.legs) do
@@ -2012,38 +1198,134 @@ local function planNow()
 	plan.state = state
 	local spend, lines = 0, 0
 	for _, e in ipairs(plan.shopping) do spend = spend + (e.cost or 0); lines = lines + 1 end
-	ui.buyHead = ('BUY LIST  %s%s: %d to buy, %s|r'):format(WHITE, mineMode and 'my picks' or scope == 'all' and ('every day (' .. #plan.days .. ')') or 'today', lines, Plan.Money(spend))
+	ui.buyHead = ('BUY LIST  %s%d to buy, %s|r'):format(WHITE, lines, Plan.Money(spend))
 	local short = plan.got < need
 	local span = whenText(s.days)
+	local rc = plan.receipts
+	local nCrates = rc and rc.n or 0
+	local what = {}
+	if nCrates > 0 then what[#what + 1] = nCrates .. (nCrates == 1 and ' crate' or ' crates') end
+	if #day.writs > 0 or nCrates == 0 then what[#what + 1] = #day.writs .. (#day.writs == 1 and ' writ' or ' writs') end
+	local head = table.concat({ nb((s.days > 1 and 'Today: ' or '') .. table.concat(what, ' + ')), nb('+' .. commas(day.rep) .. ' rep'), nb(Plan.Money(day.gold)), nb(math.floor(plan.route.total / 60 + 0.5) .. ' min') }, DOT)
+	local favorTail = (rc and (s.favorWant or 0) > 0) and (', with %s Favor'):format(commas(s.favorWant)) or ''
 	local goalLine
-	if mineMode then
-		goalLine = (short and GOLD or GREEN) .. ('My picks give +%s of the %s %s needs%s.|r'):format(commas(plan.got), commas(need), goal[1],
-			#plan.skipped > 0 and (' (' .. #plan.skipped .. ' picked can\'t be done today)') or '')
+	if short and rc and (s.receipts or 0) >= 100 then
+		goalLine = RED .. ('Crates only: the crates up now give +%s of the %s to %s. Scan again later, or allow writs (the cog).|r'):format(commas(plan.got), commas(need), goal[1])
 	elseif short then
-		goalLine = RED .. ('%s needs %s more%s. %s gives %s at most (each writ once a day): about %s days.|r')
-			:format(goal[1], commas(need), labelRep > 0 and ' after the Shipping Label' or '', s.days == 1 and 'Today' or s.days == 2 and 'Today and tomorrow' or (s.days .. ' days'), commas(plan.got), tostring(plan.daysNeeded or '?'))
+		goalLine = RED .. ('Short of %s %s: +%s of %s%s. A writ is once a day: about %s days.|r'):format(goal[1], span, commas(plan.got), commas(need), labelRep > 0 and ' after the Shipping Label' or '', tostring(plan.daysNeeded or '?'))
+	elseif s.days > 1 then
+		goalLine = GREEN .. ('Reaches %s %s%s: %s in all.|r'):format(goal[1], span, favorTail, Plan.Money(plan.gold))
 	else
+		goalLine = GREEN .. ('Reaches %s today%s.|r'):format(goal[1], favorTail)
+	end
+	local todo, more = {}, {}
+	if label.needsCrate and not (plan.receipts and plan.receipts.favorPlan and #plan.receipts.favorPlan.crates > 0) then
+		todo[#todo + 1] = GOLD .. ('Fill 1 Waylaid Crate%s: it gives the Shipping Label (+2,000 rep, +50 Favor).|r'):format(labelPlan and ' (Fill)' or ' (none priced: Scan)')
+	end
+	for _, l in ipairs(warnLines(day.writs, myLevel)) do todo[#todo + 1] = l end
+	if unread > 0 and myLevel > 0 and myLevel < 60 then
+		todo[#todo + 1] = MUTED .. 'Open a flight master\'s map on each continent so the route uses only the flights you have.|r'
+	end
+	if (levelOut or 0) > 0 then more[#more + 1] = { 'Left out for your level or reach', levelOut .. ' writs' } end
+	more[#more + 1] = { 'From', D.nodes[start][1] }
+	more[#more + 1] = { 'Flights', Plan.Money(plan.route.fares) }
+	do
+		local back = 0
+		for _, w in ipairs(scope == 'all' and plan.picks or day.writs) do back = back + (w.pouch or 0) * (scope == 'all' and (w.days or 1) or 1) end
+		if rc then
+			back = back + rc.n * Plan.RECEIPT.back
+			if rc.favorPlan then back = back + (rc.favorPlan.back or 0) end
+		end
+		plan.payNow, plan.payBack = spend, back
+	end
+	if s.days > 1 then
 		local buys = 0
 		for _, pk in ipairs(plan.picks) do buys = buys + pk.days end
-		goalLine = GREEN .. ('%s %s: %s more%s, %d hand-ins (%d different writs), %s.|r'):format(goal[1], span, commas(need), labelRep > 0 and ' after the Shipping Label' or '', buys, #plan.picks, Plan.Money(plan.gold))
+		more[#more + 1] = { 'Writ hand-ins in all', tostring(buys) }
 	end
-	local notes = {}
-	notes[#notes + 1] = ('from %s, %s in flights, pouches counted'):format(D.nodes[start][1], Plan.Money(plan.route.fares))
-	if doneToday > 0 then notes[#notes + 1] = doneToday .. ' handed in today (left out)' end
-	if held > 0 then notes[#notes + 1] = held .. ' writs held' end
-	if picked > 0 and not mineMode then notes[#notes + 1] = picked .. ' picked by hand' end
-	if fb > 0 then notes[#notes + 1] = fb .. ' prices from Auctionator/TSM' end
-	if labelRep > 0 then notes[#notes + 1] = 'Shipping Label +2,000 counted, ' .. NPC .. ' on the route' end
+	if doneToday > 0 then more[#more + 1] = { 'Handed in today already', tostring(doneToday) } end
+	if plan.receiptWhy and (s.receipts or 0) > 0 then todo[#todo + 1] = GOLD .. 'No receipt crates in this plan: ' .. plan.receiptWhy .. '.|r' end
+	if (ui.tooHigh or 0) > 0 then more[#more + 1] = ('%d of your crates need level %d: left out.'):format(ui.tooHigh, ui.tooHighAt or 0) end
+	ui.receiptFill, ui.receiptN, ui.takeOut = nil, nil, nil
+	if rc then
+		ui.receiptFill, ui.receiptN = rc.favorPlan and rc.favorPlan.crates or nil, not stage1 and rc.n or 0
+		if rc.n > 0 then more[#more + 1] = { 'Receipts', ('%d, %s Favor'):format(rc.n, commas(rc.favor)) } end
+		if (rc.writsFirst or 0) > 0 then todo[#todo + 1] = GOLD .. ('Writs first: receipts are sold from Friendly (%s to go).|r'):format(commas(rc.writsFirst)) end
+		do
+			local mineC = 0
+			for _, u in ipairs(rc.units) do if u.held then mineC = mineC + 1 end end
+			local got = {}
+			if mineC > 0 then got[#got + 1] = mineC .. ' crates' end
+			if (rc.receiptsHeld or 0) > 0 then got[#got + 1] = math.min(rc.receiptsHeld, rc.n) .. ' receipts' end
+			if #got > 0 then more[#more + 1] = { 'Yours already', table.concat(got, ', ') } end
+		end
+		do
+			local want, isCrateId = {}, {}
+			for _, c in ipairs(D.waylaid.crates) do isCrateId[c[1]] = true end
+			for _, u in ipairs(stage1 and {} or rc.units) do if u.held and u.id then want[u.id] = (want[u.id] or 0) + 1 end end
+			if rc.favorPlan then
+				for _, c in ipairs(rc.favorPlan.crates or {}) do
+					want[c.id] = (want[c.id] or 0) + c.count
+					for _, b in ipairs(c.bundles or {}) do want[b.item] = (want[b.item] or 0) + (b.n or 0) * (b.count or 0) end
+				end
+				for _, b in ipairs(rc.favorPlan.buy or {}) do if want[b.item] then want[b.item] = want[b.item] - (b.units or 0) end end
+			end
+			local from = state.from or {}
+			local out = { mail = { 0, 0 }, bank = { 0, 0 } }
+			for id, n in pairs(want) do
+				local left = n - ((from.bags or {})[id] or 0)
+				for _, src in ipairs({ 'mail', 'bank' }) do
+					local take = math.max(0, math.min(left, (from[src] or {})[id] or 0))
+					if take > 0 then local o = out[src]; o[isCrateId[id] and 1 or 2] = o[isCrateId[id] and 1 or 2] + take; left = left - take end
+				end
+			end
+			local parts = {}
+			for _, src in ipairs({ 'mail', 'bank' }) do
+				local o, t = out[src], {}
+				if o[1] > 0 then t[#t + 1] = o[1] .. (o[1] == 1 and ' crate' or ' crates') end
+				if o[2] > 0 then t[#t + 1] = o[2] .. ' items to fill them' end
+				if #t > 0 then parts[#parts + 1] = table.concat(t, ' and ') .. ' from the ' .. src end
+			end
+			ui.takeOut = #parts > 0 and ('take ' .. table.concat(parts, ', ')) or nil
+			if ui.takeOut then todo[#todo + 1] = GOLD .. 'First ' .. ui.takeOut .. '.|r' end
+		end
+		if rc.favorShort > 0 then
+			local fill = 0
+			for _, c in ipairs(rc.favorPlan and rc.favorPlan.crates or {}) do fill = fill + c.count end
+			plan.fillN = fill
+			if fill > 0 and not stage1 then todo[#todo + 1] = GOLD .. ('Fill %d crate%s for the Favor.|r'):format(fill, fill == 1 and '' or 's') end
+		elseif rc.n > 0 then
+			local buyR = math.max(0, rc.n - (rc.receiptsHeld or 0))
+			if labelFavor > 0 and (State.Favor(db) or 0) < buyR * Plan.RECEIPT.favor then todo[#todo + 1] = GOLD .. 'Hand in the Shipping Label first: its 50 Favor is counted.|r' end
+			todo[#todo + 1] = GOLD .. ('You have the Favor. Leave these crates empty: %sput one on each (Receipt) and hand them in.|r')
+				:format(buyR > 0 and ('buy %d receipts from the Scribe (%s Favor), '):format(buyR, commas(buyR * Plan.RECEIPT.favor)) or '')
+		end
+	end
+	if fb > 0 then more[#more + 1] = { 'Prices from Auctionator/TSM', fb .. ' (Scan for live ones)' } end
+	if labelRep > 0 then more[#more + 1] = { 'Shipping Label', '+2,000, counted' }; more[#more + 1] = { 'Its Favor', '+' .. labelFavor .. ', counted' } end
 	do
 		local free = State.FreeSlots()
-		if free and free < 12 then notes[#notes + 1] = RED .. 'only ' .. free .. ' free bag slots: more mailbox stops (make room, then Scan again)|r' .. MUTED end
+		if free and free < 12 then todo[#todo + 1] = RED .. 'Only ' .. free .. ' free bag slots: more mailbox stops.|r' end
 	end
-	if #plan.shopping > 50 then notes[#notes + 1] = RED .. 'More than 50 purchases: the mailbox shows 50 at a time. Take out the first batch, and the rest arrive as you make space|r' .. MUTED end
-	ui.summary:SetText(('%s%s: %d writs   %s rep   %s   %d min|r\n%s%s.|r\n%s')
-		:format(WHITE, mineMode and 'My picks' or s.days == 1 and 'Today' or ('Day 1 of ' .. s.days), #day.writs, commas(day.rep), Plan.Money(day.gold), math.floor(plan.route.total / 60 + 0.5),
-			MUTED, table.concat(notes, '. '), goalLine))
+	if #plan.shopping > 50 then todo[#todo + 1] = RED .. 'Over 50 purchases: the mailbox shows 50 at a time, the rest arrive as you make space.|r' end
+	plan.more = more
+	do
+		local lines = { WHITE .. head .. '|r', goalLine }
+		if stage1 then
+			local mins = math.floor(plan.route.total / 60 + 0.5)
+			local bits = { nb(('Step 1 of 2: get %s Favor'):format(commas(rc.favorShort))), nb(('fill %d crates'):format(plan.fillN or 0)) }
+			if #day.writs > 0 then bits[#bits + 1] = nb(#day.writs .. (#day.writs == 1 and ' writ' or ' writs')) end
+			bits[#bits + 1] = nb(mins .. ' min')
+			lines = { WHITE .. table.concat(bits, DOT) .. '|r',
+				GOLD .. 'Buy the list, fill these crates and hand them in.|r',
+				MUTED .. ('Step 2, once you have the Favor: %d empty crates for receipts (+%s rep). Scan again then.|r'):format(rc.n, commas(rc.n * Plan.RECEIPT.rep)),
+				goalLine }
+		end
+		for _, t in ipairs(todo) do lines[#lines + 1] = t end
+		ui.summary:SetText(table.concat(lines, '\n'))
+	end
 	startBuy(plan.shopping, refresh, {
-		done = 'All bought. Then Route (title bar): the hand-in route. Guide me there takes you through it, or send it to RestedXP.',
+		done = 'All bought. Now Guide me takes you round the hand-ins, or Send to RestedXP.',
 		onBought = function(e, qty, paid)
 			local t = ui.trackFor()
 			t.spent, t.planned = t.spent + paid, t.planned + (e.plan or 0) * qty
@@ -2062,7 +1344,7 @@ end
 
 local function sendToRXP(route)
 	route = route or (plan and plan.route)
-	if not route then return refresh('Plan first', true) end
+	if not route then return refresh('Scan first: there is no plan yet', true) end
 	local name = 'Writs ' .. date('%d %b %H:%M')
 	local ok0, text = pcall(Guide.Text, route, name)
 	if not ok0 then return refresh('Guide failed: ' .. tostring(text), true) end
@@ -2082,11 +1364,20 @@ end
 local function favorNow(noBuy)
 	local s = settings()
 	local W = D.waylaid
-	local need = s.favorGoal or 100
+	local favorHeldNow = State.Favor(db) or 0
+	if tooLow() then return end
+	local want = s.favorWant or (FAVOR_ONLY and (favorHeldNow + (s.favorGoal or 100))) or 0
+	if want <= 0 then return noPlan(FAVOR_ONLY and 'Type the Favor you want to have in the box above.' or 'Nothing asked for: pick a standing to reach, or type the Favor you want to have.', 'Nothing to plan') end
+	if want <= favorHeldNow then return noPlan(('You already have %s Favor. Type a higher number to get more.'):format(commas(favorHeldNow)), 'Favor already held') end
+	local lbl = State.Label()
+	local bonus = lbl.done and 0 or (lbl.favor or 0)
+	local need = math.max(1, want - favorHeldNow - bonus)
+	useFlights()
 	local p = {}
 	for id, v in pairs(db.prices or {}) do p[id] = v end
 	local st = State.Read(db)
-	local fp = Plan.Favor({ need = need, ladder = ladderOf(p), held = st.items })
+	local lad, heldOK = Plan.ForLevel(UnitLevel and UnitLevel('player') or 0, ladderOf(p), st.items)
+	local fp = Plan.Favor({ need = need, ladder = lad, held = heldOK })
 	if #fp.crates == 0 and fp.sealed == 0 then
 		return noPlan('No Waylaid Crates priced yet: open the Auction House and click Scan crates (live prices for every crate and bundle).', 'No crate prices yet')
 	end
@@ -2114,14 +1405,36 @@ local function favorNow(noBuy)
 	local crates = 0
 	for _, c in ipairs(fp.crates) do crates = crates + c.count end
 	local age = db.favorAt and math.floor(((GetServerTime and GetServerTime() or time()) - db.favorAt) / 60)
-	ui.summary:SetText(('%s%d crates for +%s Merchant\'s Favor|r\nCost to buy: %s%s|r\nBack from hand-ins: %s%s|r\n%s%s|r%s')
-		:format(WHITE, crates, commas(fp.got), GOLD, Plan.Money(spend), GREEN, Plan.Money(fp.back),
+	ui.summary:SetText(('%s%d crate%s for +%s Merchant\'s Favor|r\nCost to buy: %s%s|r\nBack from hand-ins: %s%s|r\n%s%s|r%s')
+		:format(WHITE, crates, crates == 1 and '' or 's', commas(fp.got), GOLD, Plan.Money(spend), GREEN, Plan.Money(fp.back),
 			MUTED, age and ('Prices: ' .. age .. ' min old') or 'Prices: no crate scan yet (Scan crates)',
-			fp.short and ('\n' .. RED .. ('Only %s Favor of crates up now (of %s).'):format(commas(fp.got), commas(need)) .. '|r') or ''))
+			fp.short and ('\n' .. RED .. ('Only %s Favor of crates up now (of %s).'):format(commas(fp.got), commas(need)) .. '|r') or '') .. (bonus > 0 and ('\n' .. GOLD .. ('+%d from the Shipping Label: the first crate you fill gives it, hand it in too.|r'):format(bonus)) or '') .. (function()
+				local fh = Plan.FillHeld(lad, heldOK)
+				plan.fillHeld = fh
+				if not fh then return '' end
+				local bought = {}
+				for _, b in ipairs(fp.buy) do bought[b.item] = (bought[b.item] or 0) + (b.units or 0) end
+				local used = 0
+				for _, c in ipairs(fp.crates) do used = used + math.max(0, c.count - (bought[c.id] or 0)) end
+				fh.used = used
+				local s1 = ('\n%sYour %d empty crates: this plan fills %d of them.|r'):format(MUTED, fh.held, used)
+				if fh.fill > 0 then
+					s1 = s1 .. ('\n%sFilling %s: +%s Favor for %s (%s a Favor).|r'):format(MUTED, fh.fill == fh.held and 'them all' or (fh.fill .. ' of them'), commas(fh.favor), Plan.Money(fh.cost), Plan.Money(fh.perFavor))
+				end
+				return s1
+			end)())
 	local tip = { 'This purchase' }
 	for _, c in ipairs(fp.crates) do tip[#tip + 1] = { ('%d x %s %s'):format(c.count, (c.tier:gsub('^%l', string.upper)), c.type), Plan.Money(c.perFavor) .. ' a Favor' } end
 	if fp.sealed > 0 then tip[#tip + 1] = { 'Sealed crates held', '+' .. fp.sealed .. ' Favor' } end
 	tip[#tip + 1] = { 'Net cost', Plan.Money(fp.cost) .. ' (' .. Plan.Money(fp.got > 0 and fp.cost / fp.got or 0) .. ' a Favor)' }
+	if plan.fillHeld then
+		local fh = plan.fillHeld
+		tip[#tip + 1] = 'Your crates count as free, so the plan fills one of yours whenever that is the cheapest Favor. Where it buys another kind instead, that crate and its bundle together cost less than the bundle for yours.'
+		tip[#tip + 1] = { 'Empty crates you hold', tostring(fh.held) }
+		tip[#tip + 1] = { 'Filled by this plan', tostring(fh.used or 0) }
+		if fh.fill > 0 then tip[#tip + 1] = { 'Filling ' .. fh.fill .. ' of yours', '+' .. commas(fh.favor) .. ' Favor, ' .. Plan.Money(fh.cost) } end
+		if fh.sell > 0 then tip[#tip + 1] = { 'Sold instead, about', Plan.Money(fh.sell) .. ' (at the cheapest listing, 1s each to post)' } end
+	end
 	ui.summaryTip = tip
 	ui.buyHead = ('BUY LIST  %scrates and bundles: %d to buy, %s|r'):format(WHITE, #shopping, Plan.Money(spend))
 	if noBuy then clearBuy()
@@ -2259,14 +1572,14 @@ local function favorHeld()
 	local _, class = UnitClass('player')
 	ui.heldRoute = Plan.Route({ writs = {}, start = State.Start(), bags = inMail and bagCap() or 0, hearth = State.Hearth(), druid = class == 'DRUID', mage = class == 'MAGE', crates = Guide.CrateGroups(hand), crateSlots = math.ceil(n / 5), label = not label.done and (label.held or label.onQuest) and label or nil })
 	ui.heldInfo = info
+	ui.mapSource = 'held'
 	refresh(('%d crates held: this route, %d min, +%s Favor (filled ones; unfilled need their bundle)'):format(n, math.floor(ui.heldRoute.total / 60 + 0.5), commas(favor)))
-	ui.showRoute('held')
 end
 
 local function debugDump()
 	local function say(s) DEFAULT_CHAT_FRAME:AddMessage('|cff33ccffWrits:|r ' .. s) end
 	local raw, standing, name = State.Rep()
-	local goal = State.GOALS[settings().goal]
+	local goal = State.GOALS[settings().goal] or State.GOALS[2]
 	local s = settings()
 	local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
 	say(('v%s, %s %s %d, goal %s %d in %d day(s), minute %s, bags %d, least up %d, scale %.2f'):format(meta and meta(ADDON, 'Version') or '?', name, standing, raw, goal[1], goal[2], s.days, Plan.Money(s.minute), bagCap(), s.stock, s.scale or 1))
@@ -2320,10 +1633,13 @@ local function toggle(show)
 	if ns.Blocked and ns.Blocked() then return end
 	if not ui then
 		build()
-		ui.doPlan = function() if mine().mode == 'favor' then doFavor() else doPlan() end end
+		ui.doPlan = function()
+			if mine().mode == 'favor' then return doFavor() end
+			if ui.mapSource == 'held' then routeHeld() end
+			if ui.mapSource ~= 'held' then doPlan() end
+		end
 		ui.routeHeld = function(show) if mine().mode == 'favor' then favorHeld() else routeHeld(show) end end
-		ui.sendToRXP, ui.drawRoute, ui.drawHeld, ui.showRoute, ui.favorScan = sendToRXP, ui_drawRoute, ui_drawHeld, showRoute, favorScan
-		ui.openPicker = ui_openPicker
+		ui.sendToRXP, ui.drawHeld, ui.favorScan = sendToRXP, ui_drawHeld, favorScan
 		ui.layout = function(favor)
 			local ok, e = pcall(layout, favor)
 			if not ok then ns.Log('layout error: ' .. tostring(e)); ui.laidOut = nil end
@@ -2333,7 +1649,12 @@ local function toggle(show)
 		if ns.OnBuild then pcall(ns.OnBuild, ui) end
 	end
 	if show == nil then show = not ui.frame:IsShown() end
-	if show then dock(); ui.frame:Show(); refresh() else ui.frame:Hide() end
+	if show == (ui.frame:IsShown() and true or false) then if show then dock(); refresh() end return end
+	if inFight() then return end
+	if show then
+		dock(); ui.frame:Show(); refresh()
+		if ns.Tour and not FAVOR_ONLY and mine().mode ~= 'favor' then ns.Tour.Auto() end
+	else ui.frame:Hide() end
 end
 
 local regen = CreateFrame('Frame')
@@ -2341,10 +1662,13 @@ regen:RegisterEvent('PLAYER_REGEN_ENABLED')
 regen:SetScript('OnEvent', function()
 	if ui and ui.showAfterCombat then ui.showAfterCombat, ui.hidForMap = nil, nil; ui.frame:Show(); refresh() end
 end)
+local atMail = false
 local ev = CreateFrame('Frame')
 ev:RegisterEvent('ADDON_LOADED')
 ev:RegisterEvent('AUCTION_HOUSE_SHOW')
 ev:RegisterEvent('MAIL_INBOX_UPDATE')
+ev:RegisterEvent('MAIL_SHOW')
+ev:RegisterEvent('MAIL_CLOSED')
 ev:RegisterEvent('BANKFRAME_OPENED')
 ev:RegisterEvent('CURRENCY_DISPLAY_UPDATE')
 ev:RegisterEvent('PLAYERBANKSLOTS_CHANGED')
@@ -2361,12 +1685,15 @@ ev:SetScript('OnEvent', function(_, event, arg)
 		db.settings.minute = minuteOf(db.settings.speed)
 		if not ({ [0] = true, [3] = true, [5] = true, [10] = true })[db.settings.stock] then db.settings.stock = 5 end
 		if db.guide and db.guide.day == State.WritDay() and RXPGuides and RXPGuides.RegisterGuide then pcall(RXPGuides.RegisterGuide, db.guide.text) end
-		if FAVOR_ONLY then mine().mode = 'favor' end
+		if FAVOR_ONLY then mine().mode = 'favor' else mine().mode = settings().goal == 0 and 'favor' or 'writs' end
 	elseif event == 'AUCTION_HOUSE_SHOW' then
 		if ns.Blocked and ns.Blocked(true) then return end
 		toggle(true)
 		if not plan then ui.doPlan() end
+	elseif event == 'MAIL_SHOW' then atMail = true
+	elseif event == 'MAIL_CLOSED' then atMail = false
 	elseif event == 'MAIL_INBOX_UPDATE' and db then
+		if not atMail then return end
 		State.ReadMail(db)
 		if ui and ui.frame:IsShown() and plan and mine().mode ~= 'favor' then ui.replanSoon() end
 		if ui and ui.frame:IsShown() then refresh() end
@@ -2388,7 +1715,9 @@ local function nextFill()
 			local opt
 			for _, o in ipairs(c[5]) do if (GetItemCount_(o[1]) or 0) >= o[2] then opt = o; break end end
 			if opt then
-				left = left + n
+				local can = 0
+				for _, o in ipairs(c[5]) do can = can + math.floor((GetItemCount_(o[1]) or 0) / o[2]) end
+				left = left + math.min(n, can)
 				if not pick then pick = { crate = c[1], item = opt[1], n = opt[2] } end
 			end
 		end
@@ -2411,6 +1740,7 @@ function ui_fillButton(parent, w)
 	b:SetScript('PreClick', function(self)
 		if InCombatLockdown() then return end
 		local pick = nextFill()
+		if (UnitCastingInfo and UnitCastingInfo('player')) or (UnitChannelInfo and UnitChannelInfo('player')) then pick = nil end
 		self:SetAttribute('macrotext', pick and ('/use item:' .. pick.crate .. '\n/use item:' .. pick.item .. '\n/click StaticPopup1Button1') or '')
 		if pick then ns.Log(('fill: crate %d with %d x %d'):format(pick.crate, pick.n, pick.item)) end
 	end)
@@ -2420,6 +1750,63 @@ function ui_fillButton(parent, w)
 		GameTooltip:AddLine('Fill your Waylaid Crates')
 		GameTooltip:AddLine('Click again and again: each click fills the next crate in your bags with a bundle you have.', 1, 1, 1, true)
 		if self.pick then GameTooltip:AddLine('Next: ' .. (D.waylaid.names[self.pick.crate] or '') .. ' with ' .. self.pick.n .. ' ' .. (D.waylaid.names[self.pick.item] or ''), 0.6, 0.6, 0.6, true) end
+		if ui and ui.receiptFill and Guide and Guide.FillLines and not FAVOR_ONLY and mine().mode ~= 'favor' then
+			local lines, nFill = Guide.FillLines(ui.receiptFill)
+			GameTooltip:AddLine(' ')
+			GameTooltip:AddLine(('This plan fills %d crates, for the Favor its receipts cost:'):format(nFill), 1, 0.82, 0.25, true)
+			for _, l in ipairs(lines) do GameTooltip:AddLine(l, 1, 1, 1, true) end
+			GameTooltip:AddLine(('Your other %d crates stay empty: they get the receipts. Fill only fills a crate whose items are in your bags, so it fills exactly these.'):format(ui.receiptN or 0), 0.6, 0.6, 0.6, true)
+		end
+		GameTooltip:Show()
+	end)
+	b:SetScript('OnLeave', function() GameTooltip:Hide() end)
+	b:Hide()
+	return b
+end
+local function nextStamp()
+	local R = Plan.RECEIPT
+	local have = GetItemCount_(R.item) or 0
+	local empties, pick, spare = 0, nil, nil
+	for _, c in ipairs(D.waylaid.crates) do
+		local n = GetItemCount_(c[1]) or 0
+		if n > 0 then
+			empties = empties + n
+			local fillable = false
+			for _, o in ipairs(c[5]) do if (GetItemCount_(o[1]) or 0) >= o[2] then fillable = true; break end end
+			if not fillable then pick = pick or c[1] else spare = spare or c[1] end
+		end
+	end
+	return (have > 0 and (pick or spare)) or nil, math.min(have, empties), have, empties, pick ~= nil
+end
+ns.NextFill, ns.NextStamp = nextFill, nextStamp -- (Macro.lua)
+function ui_stampButton(parent, w)
+	local b = CreateFrame('Button', PREFIX .. 'Stamp', parent, 'SecureActionButtonTemplate')
+	b:SetSize(w, 28)
+	b:RegisterForClicks('AnyUp', 'AnyDown')
+	b:SetAttribute('type', 'macro')
+	S.Box(b, C.panel, { C.gold[1] * 0.6, C.gold[2] * 0.6, C.gold[3] * 0.6, 1 })
+	b.label = S.Text(b, 12, C.gold, 'CENTER'); b.label:SetPoint('CENTER'); b.label:SetWidth(math.max(1, w - 8)); b.label:SetWordWrap(false)
+	b:SetScript('OnSizeChanged', function(self, bw) if bw and bw > 8 then self.label:SetWidth(bw - 8) end end)
+	b.label:SetText('Receipt: none')
+	b.update = function()
+		local crate, left, have, empties = nextStamp()
+		b.label:SetText(crate and ('Receipt: ' .. left .. ' left') or 'Receipt: none')
+		b.label:SetTextColor(unpack(crate and C.gold or C.muted))
+		b.crate, b.have, b.empties = crate, have, empties
+	end
+	b:SetScript('PreClick', function(self)
+		if InCombatLockdown() then return end
+		local crate = nextStamp()
+		if (UnitCastingInfo and UnitCastingInfo('player')) or (UnitChannelInfo and UnitChannelInfo('player')) then crate = nil end
+		self:SetAttribute('macrotext', crate and ('/use item:' .. Plan.RECEIPT.item .. '\n/use item:' .. crate .. '\n/click StaticPopup1Button1') or '')
+		if crate then ns.Log('receipt: onto crate ' .. crate) end
+	end)
+	b:SetScript('PostClick', function() C_Timer.After(0.5, function() if ui then ui.stamp.update() end end) end)
+	b:SetScript('OnEnter', function(self)
+		GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+		GameTooltip:AddLine('Forged Delivery Receipt')
+		GameTooltip:AddLine('Each click puts a receipt from your bags onto an empty Waylaid Crate. Hand the crate in for 50 reputation. Fill the crates you bought for Favor first: a crate with its bundle in your bags is left for last.', 1, 1, 1, true)
+		GameTooltip:AddLine(('In your bags: %d receipts, %d unfilled crates'):format(self.have or 0, self.empties or 0), 0.6, 0.6, 0.6, true)
 		GameTooltip:Show()
 	end)
 	b:SetScript('OnLeave', function() GameTooltip:Hide() end)
@@ -2432,6 +1819,7 @@ local bagToken = 0
 bagWatch:SetScript('OnEvent', function()
 	if not (ui and ui.fill and ui.frame:IsShown()) then return end
 	ui.fill.update()
+	ui.stamp.update()
 	if not plan then return end
 	ui.replanSoon()
 end)
@@ -2446,8 +1834,35 @@ end
 local function autoOn() return db and db.settings and db.settings.autoHandIn ~= false and not IsShiftKeyDown() and atDokimi() end
 local SEALED_OF = {}
 for kind, tiers in pairs(D.waylaid.quests) do for tier, q in pairs(tiers) do SEALED_OF[q] = D.waylaid.sealed[kind][tier] end end
+local tried, lastBags = {}, nil
+local QUEST_OF = {}
+for _, c in ipairs(D.waylaid.crates) do QUEST_OF[c[1]] = D.waylaid.quests[c[3]] and D.waylaid.quests[c[3]][c[2]] end
+local function stampedOf() local c = db and State.Char(db); if not c then return {} end; c.stamped = c.stamped or {}; return c.stamped end
+local function receiptsOn() return not FAVOR_ONLY and db and db.settings and (db.settings.receipts or 0) > 0 end
+local function watchStamps()
+	local now = { r = GetItemCount_(Plan.RECEIPT.item) or 0 }
+	for id in pairs(QUEST_OF) do now[id] = GetItemCount_(id) or 0 end
+	local away = (MailFrame and MailFrame.IsShown and MailFrame:IsShown()) or (BankFrame and BankFrame.IsShown and BankFrame:IsShown())
+	if lastBags and now.r < lastBags.r and not away then
+		local used = lastBags.r - now.r
+		local st = stampedOf()
+		for id, q in pairs(QUEST_OF) do
+			local gone = math.min(used, (lastBags[id] or 0) - now[id])
+			if gone > 0 then st[q] = (st[q] or 0) + gone; used = used - gone; ns.Log(('receipt: %d onto crate %d (quest %d)'):format(gone, id, q)) end
+		end
+	end
+	lastBags = now
+	for q in pairs(tried) do tried[q] = nil end
+end
+local stampWatch = CreateFrame('Frame')
+stampWatch:RegisterEvent('BAG_UPDATE_DELAYED')
+stampWatch:RegisterEvent('PLAYER_ENTERING_WORLD')
+stampWatch:SetScript('OnEvent', function() pcall(watchStamps) end)
+local RECEIPT_QUEST = 93862
+HANDIN[RECEIPT_QUEST] = true
 local function canHandIn(q)
 	if not HANDIN[q] then return false end
+	if q == RECEIPT_QUEST then return not tried[q] end
 	local item = SEALED_OF[q]
 	if item then return (GetItemCount_(item) or 0) > 0 end
 	local lb = State.Label()
@@ -2455,9 +1870,34 @@ local function canHandIn(q)
 end
 ns.CanHandIn = canHandIn
 local qf = CreateFrame('Frame')
+local function lookAgain(n)
+	if not (C_Timer and C_GossipInfo) then return end
+	C_Timer.After(0.4, function()
+		if not autoOn() then return end
+		local av = C_GossipInfo.GetAvailableQuests() or {}
+		for _, q in ipairs(av) do
+			if canHandIn(q.questID) then ns.Log('hand-in: quest ' .. q.questID .. ' picked on a second look'); return C_GossipInfo.SelectAvailableQuest(q.questID) end
+		end
+		if n > 1 then return lookAgain(n - 1) end
+		if GossipFrame and GossipFrame:IsShown() and #av == 0 then tried[RECEIPT_QUEST] = true; ns.Log('hand-in: nothing offered, no receipt crate left') end
+	end)
+end
 for _, e in ipairs({ 'GOSSIP_SHOW', 'QUEST_GREETING', 'QUEST_DETAIL', 'QUEST_PROGRESS', 'QUEST_COMPLETE' }) do qf:RegisterEvent(e) end
 qf:SetScript('OnEvent', function(_, event)
+	if event == 'QUEST_DETAIL' and db and db.settings and db.settings.autoHandIn ~= false and not IsShiftKeyDown() then
+		local lb = State.Label()
+		if not lb.done and GetQuestID and GetQuestID() == lb.quest then ns.Log('Shipping Label: quest taken'); return AcceptQuest() end
+	end
 	if not autoOn() then return end
+	do
+		local sealed = 0
+		for _, item in pairs(SEALED_OF) do sealed = sealed + (GetItemCount_(item) or 0) end
+		local act, av = '-', '-'
+		if event == 'GOSSIP_SHOW' and C_GossipInfo then act, av = #(C_GossipInfo.GetActiveQuests() or {}), #(C_GossipInfo.GetAvailableQuests() or {})
+		elseif event == 'QUEST_GREETING' then act, av = GetNumActiveQuests() or 0, GetNumAvailableQuests() or 0 end
+		qf.lastWindow = GetTime()
+		ns.Log(('hand-in window: %s quest %s, %s active, %s available, %d Sealed held'):format(event, tostring(GetQuestID and GetQuestID() or '-'), tostring(act), tostring(av), sealed))
+	end
 	local ok, err = pcall(function()
 		if event == 'GOSSIP_SHOW' and C_GossipInfo then
 			for _, q in ipairs(C_GossipInfo.GetActiveQuests() or {}) do
@@ -2466,6 +1906,13 @@ qf:SetScript('OnEvent', function(_, event)
 			for _, q in ipairs(C_GossipInfo.GetAvailableQuests() or {}) do
 				if canHandIn(q.questID) then return C_GossipInfo.SelectAvailableQuest(q.questID) end
 			end
+			do
+				local ids = {}
+				for _, q in ipairs(C_GossipInfo.GetAvailableQuests() or {}) do ids[#ids + 1] = tostring(q.questID) end
+				for _, q in ipairs(C_GossipInfo.GetActiveQuests() or {}) do ids[#ids + 1] = 'on ' .. tostring(q.questID) end
+				ns.Log('hand-in: nothing picked; offered: ' .. (#ids > 0 and table.concat(ids, ', ') or 'none') .. (tried[RECEIPT_QUEST] and ' (receipt quest left alone)' or ''))
+			end
+			lookAgain(3)
 		elseif event == 'QUEST_GREETING' then
 			for i = 1, GetNumActiveQuests() do
 				local id = GetActiveQuestID and GetActiveQuestID(i)
@@ -2475,16 +1922,39 @@ qf:SetScript('OnEvent', function(_, event)
 				local id = select(5, GetAvailableQuestInfo(i))
 				if id and canHandIn(id) then return SelectAvailableQuest(i) end
 			end
+			tried[RECEIPT_QUEST] = true
 		elseif HANDIN[GetQuestID() or 0] then
 			if event == 'QUEST_DETAIL' then AcceptQuest()
 			elseif event == 'QUEST_PROGRESS' then
 				if IsQuestCompletable() then CompleteQuest()
 				else
 					ns.Log('auto hand-in: quest ' .. tostring(GetQuestID()) .. ' can\'t be completed, left')
+					local q = GetQuestID()
+					if q then tried[q] = true; local st = stampedOf(); st[q] = nil end
 					if DeclineQuest then DeclineQuest() elseif CloseQuest then CloseQuest() end
 				end
 			elseif event == 'QUEST_COMPLETE' then
-				if (GetNumQuestChoices() or 0) <= 1 then GetQuestReward(1); ns.Log('handed in quest ' .. GetQuestID()) end
+				if (GetNumQuestChoices() or 0) <= 1 then
+					GetQuestReward(1); ns.Log('handed in quest ' .. GetQuestID())
+					do
+						local q, st = GetQuestID(), stampedOf()
+						if (st[q] or 0) > 0 and (GetItemCount_(SEALED_OF[q] or 0) or 0) == 0 then st[q] = st[q] > 1 and st[q] - 1 or nil end
+					end
+					local at = GetTime()
+					qf.lastWindow = at
+					C_Timer.After(0.4, function()
+						if qf.lastWindow ~= at or not ns.Macro then return end
+						local function more()
+							for q in pairs(SEALED_OF) do if canHandIn(q) then return true end end
+							if canHandIn(RECEIPT_QUEST) then return true end
+							return false
+						end
+						if more() then ns.Macro.TalkOn(more) end
+					end)
+					C_Timer.After(1.5, function()
+						if qf.lastWindow == at then ns.Log('hand-in: no window came back by itself after that one') end
+					end)
+				else ns.Log('hand-in: a reward to choose, left to you') end
 			end
 		end
 	end)
@@ -2596,6 +2066,11 @@ ns.UI = {
 	buying = function() return oneOff ~= nil end,
 	bagCap = bagCap,
 	toggle = function(show) toggle(show) end,
+	parts = function() return ui end,
+	setFavorWant = function(v) if ui and ui.setFavorWant then ui.setFavorWant(v) elseif db then db.settings.favorWant = math.max(0, math.floor(tonumber(v) or 0)) end end,
+	setScale = function(v) setScale(v) end,
+	resetPos = function() settings().pos = nil; if ui then dock() end end,
+	refresh = function() if ui then refresh() end end,
 	prices = prices,
 	shown = function() return ui and ui.frame:IsShown() or false end,
 }
@@ -2629,10 +2104,6 @@ local function slash(arg)
 			print(('  %s (%s): %s'):format(src, when, #lines > 0 and table.concat(lines, ', ') or 'nothing'))
 		end
 		print('  /writs held forget: forget the mail and bank snapshots (read again at the next mailbox or bank)')
-		return
-	end
-	if arg:match('^%s*map') and ns.OMRoute and ns.OMRoute.Available() then
-		if ns.OMRoute.IsOn() then ns.OMRoute.SetOn(false) elseif ui and ui.mapData then ns.OMRoute.SetData(ui.mapData); ns.OMRoute.Open(true) end
 		return
 	end
 	local sc = arg:match('^%s*scale%s+([%d%.]+)')

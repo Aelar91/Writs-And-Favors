@@ -6,6 +6,7 @@ local PRICE_GUARD = 1.25
 local TRIES = { 1, 2, 4 } -- seconds to wait before asking again
 local MORE = 2 -- requests for more of a key's results
 local PRICE_WAIT = 5 -- seconds for the locked price after Check price
+local BUY_WAIT = 8 -- seconds for a purchase to be answered before the line is looked up again
 local SORTS = function() return { { sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false } } end
 local list, cur, pending, onChange
 local opts = {}
@@ -65,7 +66,7 @@ local function ask(e, try, what, send, check)
 		if check and check() then return end
 		if TRIES[try + 1] then log('no answer for ' .. e.name .. ' (' .. what .. '), try ' .. (try + 1)); return ask(e, try + 1, what, send, check) end
 		step = 'idle'
-		changed('No answer for ' .. e.name .. ' after ' .. (#TRIES + 1) .. ' tries (none up?). Skip it, or Plan again.')
+		changed('No answer for ' .. e.name .. ' after ' .. (#TRIES + 1) .. ' tries (none up?). Skip it, or Scan again.')
 	end)
 end
 
@@ -79,7 +80,7 @@ local function readCommodity(e)
 			if got >= n then break end
 		end
 	end
-	if got < n then step = 'idle'; return changed(('Only %d of %d %s up. Skip it, or Plan again.'):format(got, n, e.name)) end
+	if got < n then step = 'idle'; return changed(('Only %d of %d %s up. Skip it, or Scan again.'):format(got, n, e.name)) end
 	setPending({ kind = 'commodity', stage = 'start', qty = n, total = total, each = total / n })
 end
 
@@ -158,7 +159,7 @@ local function readKeys(e)
 	e.keys = {}
 	for n, x in ipairs(keys) do e.keys[n] = x.key end
 	log(('%s: %d kinds up'):format(e.name, #e.keys))
-	if #e.keys == 0 then step = 'idle'; return changed('None of ' .. e.name .. ' up now. Skip it, or Plan again.') end
+	if #e.keys == 0 then step = 'idle'; return changed('None of ' .. e.name .. ' up now. Skip it, or Scan again.') end
 	searchKey(e, 1)
 end
 
@@ -202,7 +203,7 @@ local function handle(event, a, b)
 		setPending({ kind = 'commodity', stage = 'confirm', qty = pending.qty, each = a, total = b })
 	elseif event == 'COMMODITY_PRICE_UNAVAILABLE' and step == 'price' then
 		step = 'idle'
-		changed('Not enough ' .. e.name .. ' up. Skip it, or Plan again.')
+		changed('Not enough ' .. e.name .. ' up. Skip it, or Scan again.')
 	elseif event == 'COMMODITY_PURCHASE_SUCCEEDED' and step == 'buying' and pending and pending.kind == 'commodity' then bought(e, pending.qty)
 	elseif event == 'AUCTION_HOUSE_PURCHASE_COMPLETED' and step == 'buying' and pending and a == pending.auction then bought(e, pending.qty)
 	elseif event == 'COMMODITY_PURCHASE_FAILED' and step == 'buying' then
@@ -235,6 +236,13 @@ function Buy.Click(anyway)
 	if p.kind == 'commodity' then C_AuctionHouse.ConfirmCommoditiesPurchase(e.id, p.qty)
 	else C_AuctionHouse.PlaceBid(p.auction, p.total) end
 	changed('Buying ' .. p.qty .. ' ' .. (e.as or e.name) .. '...')
+	local mine = p
+	later(BUY_WAIT, function()
+		if step == 'buying' and pending == mine then
+			changed('No answer from the Auction House for ' .. (e.as or e.name) .. ' (sold already?). Finding it again...')
+			prepare()
+		end
+	end)
 end
 
 function Buy.Skip()

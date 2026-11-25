@@ -29,7 +29,7 @@ function ns.Log(msg)
 	if not db then return end
 	db.log = db.log or {}
 	table.insert(db.log, date('%H:%M:%S') .. ' ' .. tostring(msg))
-	while #db.log > 40 do table.remove(db.log, 1) end
+	while #db.log > 120 do table.remove(db.log, 1) end
 end
 
 local function finish(msg, failed)
@@ -110,6 +110,17 @@ local function readBrowse()
 		pages = pages + 1
 		C_AuctionHouse.RequestMoreBrowseResults()
 		return
+	end
+	if C_AuctionHouse.HasFullBrowseResults() and (next(seen) or not job.herbs) then
+		local gone = 0
+		for id in pairs(job.want) do
+			local old = db.prices[id]
+			if not seen[id] and old and old.at ~= job.at and (old.each or (old.up or 0) > 0) then
+				db.prices[id] = { up = 0, at = job.at }
+				gone = gone + 1
+			end
+		end
+		if gone > 0 then ns.Log(('scan: %d no longer up%s'):format(gone, job.term and (' ("' .. job.term .. '")') or '')) end
 	end
 	if job.writs then queueItems() elseif job.crates then queueFavor() elseif job.herbs then queueHerbs() else answered() end
 end
@@ -262,6 +273,12 @@ function Scan.Start(store, progress, doneFn, o)
 	else
 		for id in pairs(isWrit) do want[id] = true end
 		q = { { term = word, want = want, writs = true, at = started } }
+		local crateWord = opts.receipts and L.CrateSearch()
+		if crateWord then
+			local cw = {}
+			for _, c in ipairs(D.waylaid.crates) do cw[c[1]] = true end
+			q[#q + 1] = { term = crateWord, want = cw, crates = true, at = started }
+		end
 	end
 	done, total, busy, waiting, spent, answers = 0, 1, true, nil, 0, 0
 	if opts.full then db.favorFullAt = started elseif opts.favor then db.favorAt = started else db.scanAt = started end
